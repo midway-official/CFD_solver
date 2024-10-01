@@ -1,56 +1,99 @@
-#include "CFDmath.h"
-#include <iostream>
 
-int main() {
-    try {
-        // 测试 n_head_to_array
-        std::string n_head_input = "1 2 3 4 5 0x1A";
-        std::vector<int> n_result = n_head_to_array(n_head_input);
-        std::cout << "n_head_to_array 结果: ";
-        for (int val : n_result) {
-            std::cout << val << " ";
-        }
-        std::cout << std::endl;
+#include "CFDmath.h"  // 确保包含头文件
 
-        // 测试 f_head_to_array
-        std::string f_head_input = "1 23 23c2 234 0x5";
-        std::vector<int> f_result = f_head_to_array(f_head_input);
-        std::cout << "f_head_to_array 结果: ";
-        for (int val : f_result) {
-            std::cout << val << " ";
-        }
-        std::cout << std::endl;
-
-        // 测试 nodes_coordinate_to_array
-        std::string nodes_input = "1.0 2.0 3.0 4.0 5.0 6.0";
-        auto nodes_result = nodes_coordinate_to_array(nodes_input, 3);
-        std::cout << "nodes_coordinate_to_array 结果: " << std::endl;
-        for (const auto& coords : nodes_result) {
-            for (const auto& coord : coords) {
-                std::cout << coord << " ";
-            }
-            std::cout << std::endl;
-        }
-
-        // 测试 Mesh 类
-        Mesh mesh;
-       
-        mesh.parse_msh_file("2.msh");  // 读取文件
-        print2DArraySize(mesh.get_points());
-        print2DArraySize(mesh.get_faces());
-
-        //测试nodes类
-        Nodes nodes(mesh.get_points()) ;
-        nodes.print();
-        //测试faces类
-        Faces faces(mesh.get_faces(),nodes);
-        faces.calculateAllNormals(nodes);
-        faces.calculateAllCenters(nodes);
-        faces.calculateAllAreas(nodes);
-   
-    } catch (const std::exception& e) {
-        std::cerr << "发生异常: " << e.what() << std::endl;
+// 函数声明
+void printMaxValue(const std::vector<std::vector<int>>& vec) {
+    if (vec.empty() || vec[0].empty()) {
+        std::cout << "The vector is empty." << std::endl;
+        return;
     }
 
+    int maxValue = std::numeric_limits<int>::min(); // 初始化为最小整数
+
+    for (const auto& innerVec : vec) {
+        for (int value : innerVec) {
+            if (value > maxValue) {
+                maxValue = value;
+            }
+        }
+    }
+
+    std::cout << "Maximum value: " << maxValue << std::endl;
+}
+void printNodeData(const std::vector<std::vector<double>>& nodeData) {
+    std::cout << "Node Data:" << std::endl;
+    for (const auto& node : nodeData) {
+        for (double value : node) {
+            std::cout << value << " ";
+        }
+        std::cout << std::endl; // 换行
+    }
+}
+
+void printFaceData(const std::vector<std::vector<int>>& faceData) {
+    std::cout << "Face Data:" << std::endl;
+    for (const auto& face : faceData) {
+        for (int value : face) {
+            std::cout << value << " ";
+        }
+        std::cout << std::endl; // 换行
+    }
+}
+void printFaces(const std::vector<std::vector<int>>& faces) {
+    for (const auto& face : faces) {
+        std::cout << "(";
+        for (size_t i = 0; i < face.size(); ++i) {
+            std::cout << face[i];
+            if (i < face.size() - 1) {
+                std::cout << ", "; // 添加逗号分隔
+            }
+        }
+        std::cout << ")" << std::endl; // 每个子向量换行
+    }
+}
+int main() {
+    std::string filename = "2.msh"; // 输入文件名
+    std::vector<std::vector<double>> nodeData;
+    std::vector<std::vector<int>> faceData;
+    
+    parseNodes(filename,nodeData);
+    parseFaces(filename,faceData);
+    printNodeData(nodeData);
+    printMaxValue(faceData);
+    // 输出提取的坐标数量
+        std::cout << "Total number of coordinates: " << nodeData.size() << std::endl;
+    // 输出提取的面信息数量
+        std::cout << "Total number of faces: " << faceData.size() << std::endl;
+   
+    Point p1({1.0, 2.0, 3.0});
+    Point p2({4.0, 5.0, 6.0});
+
+    Point p3 = p1 + p2;
+    Point p4 = p1 - p2;
+    Point p5 = p1 * 2.0;
+    Point p6 = p1 / 2.0;
+    Point p7 = p1 ^ p2;
+    double mag = p1.magnitude();
+    Point unit = p1.normalize();
+
+    std::cout << "p1: "; p1.print();
+    std::cout << "p2: "; p2.print();
+    std::cout << "p3 (p1 + p2): "; p3.print();
+    std::cout << "p4 (p1 - p2): "; p4.print();
+    std::cout << "p5 (p1 * 2): "; p5.print();
+    std::cout << "p6 (p1 / 2): "; p6.print();
+    std::cout << "p7 (p1 ^ p2): "; p7.print();
+    std::cout << "Magnitude of p1: " << mag << "\n";
+    std::cout << "Unit vector of p1: "; unit.print();
+
+    Faces faces(nodeData, faceData);
+        //faces.printFaces();
+    // 计算并打印所有面的中心点
+    auto centers = faces.calculateAllCenters();
+   /* for (const auto& center : centers) {
+        std::cout << "Center: ";
+        center.print();
+    }*/
+    
     return 0;
 }
