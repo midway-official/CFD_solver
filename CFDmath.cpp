@@ -151,11 +151,231 @@ void parseFaces(const std::string &filename, std::vector<std::vector<int>> &face
     }
 }
 
+void parseFacetree(const std::string &filename, std::vector<std::vector<int>> &facetree) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        throw std::runtime_error("无法打开文件");
+    }
 
-// 构造函数
+    std::string line;
+    std::vector<int> headerInfo;
+    bool readingFacetree = false; // 是否正在读取面tree信息
+
+    while (std::getline(file, line)) {
+        // 去除行首和行尾的空白字符
+        line.erase(0, line.find_first_not_of(" \n\r\t"));
+        line.erase(line.find_last_not_of(" \n\r\t") + 1);
+
+        // 检查行是否以 '(' 结尾
+        if (line.back() == '(') {
+            if (line.find("(59") == 0) {
+                std::regex headerRegex(R"(\(59\s+\((.*?)\))");
+                std::smatch match;
+                if (std::regex_search(line, match, headerRegex) && match.size() > 1) {
+                    headerInfo.clear();
+                    std::istringstream headerStream(match[1].str());
+                    std::string hexValue;
+
+                    while (headerStream >> hexValue) {
+                        int decimalValue;
+                        std::stringstream ss;
+                        ss << std::hex << hexValue;
+                        ss >> decimalValue;
+                        headerInfo.push_back(decimalValue);
+                    }
+                    readingFacetree = true;
+                    continue;
+                }
+            }
+        }
+
+        // 如果正在读取面tree信息
+        if (readingFacetree) {
+            if (line.find("))") != std::string::npos) {
+                std::istringstream iss(line);
+                std::string hexValue;
+                std::vector<int> faceInfo;
+
+                while (iss >> hexValue) {
+                    int decimalValue;
+                    std::stringstream ss;
+                    ss << std::hex << hexValue;
+                    ss >> decimalValue;
+                    faceInfo.push_back(decimalValue);
+                }
+
+                // 只取最后两列
+                std::vector<int> newRow;
+                newRow.push_back(facetree.size() + 1); // 插入编号
+                newRow.push_back(faceInfo[faceInfo.size() - 2]); // 倒数第二列
+                newRow.push_back(faceInfo.back()); // 最后一列
+
+                facetree.push_back(newRow);
+
+                readingFacetree = false;
+                continue;
+            }
+
+            std::istringstream iss(line);
+            std::string hexValue;
+            std::vector<int> faceInfo;
+
+            while (iss >> hexValue) {
+                int decimalValue;
+                std::stringstream ss;
+                ss << std::hex << hexValue;
+                ss >> decimalValue;
+                faceInfo.push_back(decimalValue);
+            }
+
+            // 只取最后两列
+            std::vector<int> newRow;
+            newRow.push_back(facetree.size() + 1); // 插入编号
+            newRow.push_back(faceInfo[faceInfo.size() - 2]); // 倒数第二列
+            newRow.push_back(faceInfo.back()); // 最后一列
+
+            facetree.push_back(newRow);
+        }
+    }
+}
+//计算cell信息
+
+
+std::vector<std::vector<int>> processCelldata(std::vector<std::vector<int>> faceData, const std::vector<std::vector<int>>& facetree) {
+    int maxCells = 0;
+
+    // 查找faceData中最后两列的最大值作为总cell数量
+    for (const auto& row : faceData) {
+        if (row.size() >= 2) {
+            maxCells = std::max(maxCells, std::max(row[row.size() - 2], row[row.size() - 1]));
+        }
+    }
+
+    std::vector<bool> toRemove(faceData.size(), false);
+    std::vector<int> freeindex;
+
+    // 读取面树信息的第二列和第三列
+    for (const auto& row : facetree) {
+        if (row.size() >= 3) {
+            freeindex.push_back(row[1] - 1); // F1, 转换为索引
+            freeindex.push_back(row[2] - 1); // F2, 转换为索引
+        }
+    }
+
+    // 标记需要删除的行
+    for (int index : freeindex) {
+        if (index >= 0 && index < toRemove.size()) {
+            toRemove[index] = true;
+        }
+    }
+
+    // 使用拷贝进行删除标记为true的行
+    std::vector<std::vector<int>> modifiedFaceData = faceData; // 创建拷贝
+    modifiedFaceData.erase(std::remove_if(modifiedFaceData.begin(), modifiedFaceData.end(),
+        [&toRemove, &modifiedFaceData](const std::vector<int>& face) {
+            int index = &face - &modifiedFaceData[0];  // 获取当前行的索引
+            return index < modifiedFaceData.size() && toRemove[index]; // 判断是否需要删除
+        }), modifiedFaceData.end());
+
+    std::vector<std::vector<int>> cellData(maxCells);
+
+    // 处理celldata
+    for (int i = 1; i <= maxCells; ++i) {
+        std::vector<int> index;
+        std::unordered_set<int> resultSet;
+
+        // 提取modifiedFaceData中最后两列有i的行的编号
+        for (size_t row = 0; row < modifiedFaceData.size(); ++row) {
+            if (modifiedFaceData[row][modifiedFaceData[row].size() - 2] == i || modifiedFaceData[row][modifiedFaceData[row].size() - 1] == i) {
+                index.push_back(row + 1); // 从1开始的编号
+            }
+        }
+
+        // 读取对应行并处理
+        for (int idx : index) {
+            const auto& row = modifiedFaceData[idx - 1]; // 转换为0开始的索引
+
+            // 添加modifiedFaceData的行中的第3, 4, 5, 6个元素到结果集中
+            for (size_t j = 2; j < 6 && j < row.size(); ++j) {
+                resultSet.insert(row[j]);
+            }
+        }
+
+        // 转换unordered_set为vector并存储到cellData
+        cellData[i - 1] = std::vector<int>(resultSet.begin(), resultSet.end());
+    }
+
+    return cellData;
+}
+
+void printMaxValue(const std::vector<std::vector<int>>& vec) {
+    if (vec.empty() || vec[0].empty()) {
+        std::cout << "The vector is empty." << std::endl; // 如果向量为空
+        return;
+    }
+
+    int maxValue = std::numeric_limits<int>::min(); // 初始化为最小整数
+
+    // 遍历二维向量，找到最大值
+    for (const auto& innerVec : vec) {
+        for (int value : innerVec) {
+            if (value > maxValue) {
+                maxValue = value; // 更新最大值
+            }
+        }
+    }
+
+    std::cout << "Maximum value: " << maxValue << std::endl; // 打印最大值
+}
+
+void printNodeData(const std::vector<std::vector<double>>& nodeData) {
+    std::cout << "Node Data:" << std::endl; // 打印节点数据标题
+    for (const auto& node : nodeData) {
+        for (double value : node) {
+            std::cout << value << " "; // 打印每个节点的值
+        }
+        std::cout << std::endl; // 换行
+    }
+}
+
+void printData(const std::vector<std::vector<int>>& faceData) {
+    std::cout << "Face Data:" << std::endl; // 打印面数据标题
+    size_t maxRows = std::min(faceData.size(), size_t(100000)); // 确保不超过100行
+    for (size_t row = 0; row < maxRows; ++row) {
+        for (int value : faceData[row]) {
+            std::cout << value << " "; // 打印每个面的值
+        }
+        std::cout << std::endl; // 换行
+    }
+}
+
+void printFaces(const std::vector<std::vector<int>>& faces) {
+    // 打印每个面
+    for (const auto& face : faces) {
+        std::cout << "(";
+        for (size_t i = 0; i < face.size(); ++i) {
+            std::cout << face[i]; // 打印面中的每个值
+            if (i < face.size() - 1) {
+                std::cout << ", "; // 添加逗号分隔
+            }
+        }
+        std::cout << ")" << std::endl; // 每个面换行
+    }
+}
+
+void printMaxSubvectorLength(const std::vector<std::vector<int>>& vec) {
+    int maxLength = 0; // 初始化最大长度
+    // 遍历每个子向量，找到最大长度
+    for (const auto& subvec : vec) {
+        maxLength = std::max(maxLength, static_cast<int>(subvec.size())); // 更新最大长度
+    }
+    std::cout << maxLength << std::endl; // 打印最大子向量长度
+}
+
+// point构造函数
 Point::Point(const std::vector<double>& coordinates) {
     if (coordinates.size() != 3) {
-        throw std::invalid_argument("Point must be initialized with a vector of size 3.");
+        throw std::invalid_argument("必须使用长度为3的矢量构造点");
     }
     this->coordinates = coordinates;
 }
@@ -184,7 +404,7 @@ Point Point::operator*(double scalar) const {
 // 与double的除法
 Point Point::operator/(double scalar) const {
     if (scalar == 0) {
-        throw std::invalid_argument("Division by zero.");
+        throw std::invalid_argument("除以0.");
     }
     return Point({coordinates[0] / scalar,
                    coordinates[1] / scalar,
@@ -225,7 +445,7 @@ double Point::magnitude() const {
 Point Point::normalize() const {
     double mag = magnitude();
     if (mag == 0) {
-        throw std::invalid_argument("Cannot normalize a zero vector.");
+        throw std::invalid_argument("无法单位化零向量.");
     }
     return *this / mag;
 }
@@ -295,14 +515,17 @@ Field Field::operator*(double scalar) const {
         return Field(result);
     }
 }
-
+// 标量与 Field 对象的乘法
+Field operator*(double scalar, const Field& field) {
+    return field * scalar; // 利用已经实现的 Field * scalar 的实现
+}
 
 // 重载乘法运算符，允许标量场与矢量场相乘
 Field Field::operator*(const Field& other) const {
     if (isPointField && !other.isPointField) {
         // 当前是点场，另一个是标量场
         if (other.scalars.size() != points.size()) {
-            throw std::invalid_argument("Size mismatch between point field and scalar field.");
+            throw std::invalid_argument("矢量场与标量场大小不相容.");
         }
         std::vector<Point> result;
         for (size_t i = 0; i < points.size(); ++i) {
@@ -312,7 +535,7 @@ Field Field::operator*(const Field& other) const {
     } else if (!isPointField && other.isPointField) {
         // 当前是标量场，另一个是点场
         if (scalars.size() != other.points.size()) {
-            throw std::invalid_argument("Size mismatch between scalar field and point field.");
+            throw std::invalid_argument("矢量场与标量场大小不相容d.");
         }
         std::vector<Point> result;
         for (size_t i = 0; i < other.points.size(); ++i) {
@@ -320,7 +543,7 @@ Field Field::operator*(const Field& other) const {
         }
         return Field(result);
     } else {
-        throw std::invalid_argument("Invalid field multiplication. One must be a scalar field and the other must be a point field.");
+        throw std::invalid_argument("必须是一个矢量场一个标量场.");
     }
 }
 
@@ -328,7 +551,7 @@ Field Field::operator*(const Field& other) const {
 Field Field::dot(const Field& other) const {
     checkCompatibility(other);
     if (!isPointField || !other.isPointField) {
-        throw std::invalid_argument("Dot product can only be computed between point fields.");
+        throw std::invalid_argument("只有矢量场之间可以点乘.");
     }
     std::vector<Scalar> result;
     for (size_t i = 0; i < points.size(); ++i) {
@@ -341,7 +564,7 @@ Field Field::dot(const Field& other) const {
 Field Field::cross(const Field& other) const {
     checkCompatibility(other);
     if (!isPointField || !other.isPointField) {
-        throw std::invalid_argument("Cross product can only be computed between point fields.");
+        throw std::invalid_argument("只有矢量场之间可以叉乘.");
     }
     std::vector<Point> result;
     for (size_t i = 0; i < points.size(); ++i) {
@@ -353,7 +576,7 @@ Field Field::cross(const Field& other) const {
 // 计算当前点场的模长，返回标量场
 Field Field::magnitude() const {
     if (!isPointField) {
-        throw std::invalid_argument("Magnitude can only be computed for point fields.");
+        throw std::invalid_argument("只能返回矢量场的模长标量场.");
     }
     std::vector<Scalar> magnitudes;
     for (const auto& point : points) {
@@ -365,7 +588,7 @@ Field Field::magnitude() const {
 // 标准化当前的点场，返回标准化后的点场
 Field Field::normalize() const {
     if (!isPointField) {
-        throw std::invalid_argument("Normalization can only be performed on point fields.");
+        throw std::invalid_argument("只能返回矢量场的标准化矢量场.");
     }
     std::vector<Point> normalizedPoints;
     for (const auto& point : points) {
@@ -374,6 +597,22 @@ Field Field::normalize() const {
     return Field(normalizedPoints);
 }
 
+//访问场中某个点或标量
+Point& Field::pointAt(size_t index) {
+    return points[index];
+}
+
+const Point& Field::pointAt(size_t index) const {
+    return points[index];
+}
+
+Scalar& Field::scalarAt(size_t index) {
+    return scalars[index];
+}
+
+const Scalar& Field::scalarAt(size_t index) const {
+    return scalars[index];
+}
 // 打印当前 Field 的内容
 void Field::print() const {
     if (isPointField) {
@@ -393,30 +632,31 @@ void Field::checkCompatibility(const Field& other) const {
     if (isPointField != other.isPointField || 
         (isPointField && points.size() != other.points.size()) ||
         (!isPointField && scalars.size() != other.scalars.size())) {
-        throw std::invalid_argument("Fields are not compatible for operation.");
+        throw std::invalid_argument("场类型不兼容，无法进行操作");
     }
 }
 
 // 面集构造函数
+Faces::Faces() : nodes(), faces() {}
 Faces::Faces(const std::vector<std::vector<double>>& nodeCoordinates,
              const std::vector<std::vector<int>>& faceInfo) 
     : nodes(nodeCoordinates), faces(faceInfo) {
     // 检查节点坐标的有效性
     for (const auto& node : nodes) {
         if (node.size() != 3) {
-            throw std::invalid_argument("Each node must have three coordinates.");
+            throw std::invalid_argument("每个点必须有3个坐标.");
         }
     }
 
     // 检查面的信息的有效性
     for (const auto& face : faces) {
         if (face.size() != 8) {
-            throw std::invalid_argument("Each face info must have eight elements (zoneid, bctype, n0, n1, n2, n3, c0, c1).");
+            throw std::invalid_argument("面必须包含8个信息 (zoneid, bctype, n0, n1, n2, n3, c0, c1).");
         }
         // 检查节点编号的有效性（从1开始）
         for (int i = 2; i < 6; ++i) { // n0 到 n3
             if (face[i] < 1 || face[i] -1 > nodes.size()) {
-                throw std::invalid_argument("Node indices must be within the range of available nodes.");
+                throw std::invalid_argument("节点必须在可用范围内.");
             }
         }
     }
@@ -581,4 +821,172 @@ Field Faces::calculateAllAreas() const {
     }
 
     return Field(areas);
+}
+
+// 访问索引为 i 的面实现
+const std::vector<int>& Faces::getFace(size_t i) const {
+    if (i >= faces.size()) {
+        throw std::out_of_range("Face index out of range.");
+    }
+    return faces[i];
+}
+
+// 修改 faces 中第一个元素为 faceIndex 的行的第二个元素实现
+void Faces::setBctypeForFace(int zoneIndex, int bctype) {
+    for (auto& face : faces) {
+        if (face[0] == zoneIndex) {
+            face[1] = bctype; // 修改第二个元素
+            return;
+        }
+    }
+    throw std::runtime_error("Face with the specified index not found.");
+}
+
+// cell集构造函数
+Cells::Cells() : nodes(), cells() {}
+Cells::Cells(const std::vector<std::vector<double>>& nodeCoordinates,
+        const std::vector<std::vector<int>>& cellsdata)
+    : nodes(nodeCoordinates), cells(cellsdata) {
+    // 检查节点坐标的有效性
+    for (const auto& node : nodes) {
+        if (node.size() != 3) {
+            throw std::invalid_argument("每个点必须有3个坐标.");
+        }
+    }
+
+    // 检查面的信息的有效性
+    for (const auto& cell : cells) {
+        if (cell.size() != 8) {
+            throw std::invalid_argument("每个体必须包含8个电 .");
+        }
+        // 检查节点编号的有效性（从1开始）
+        for (int i = 2; i < 6; ++i) { // n0 到 n3
+            if (cell[i] < 1 || cell[i] -1 > nodes.size()) {
+                throw std::invalid_argument("节点必须在可用范围内.");
+            }
+        }
+    }
+} 
+//计算cell中心点，返回一个矢量场
+Field Cells::calculateAllCenters() const {
+    std::vector<Point> centers;
+
+    for (const auto& cell : cells) {
+        
+
+        double x = 0.0, y = 0.0, z = 0.0;
+
+        for (int i = 0; i <= 7; ++i) {
+            int nodeIndex = cell[i] -1 ; // 调整索引
+            if (nodeIndex < 0 || nodeIndex >= nodes.size()) {
+                std::cerr << "Error: Node index " << nodeIndex << " out of bounds. "
+                          << "nodes.size() = " << nodes.size() << std::endl;
+                throw std::runtime_error("Node index out of bounds.");
+            }
+
+            x += nodes[nodeIndex][0];
+            y += nodes[nodeIndex][1];
+            z += nodes[nodeIndex][2];
+        }
+
+        // 计算中心点并添加到结果中
+        centers.emplace_back(std::vector<double>{x / 8.0, y / 8.0, z / 8.0});
+    }
+
+    return Field(centers);
+}
+//计算cells体积
+Field Cells::calculateAllVolumes() const {
+    std::vector<Scalar> volumes;
+
+    for (const auto& cell : cells) {
+        // 确保单元中包含足够的节点
+        if (cell.size() < 8) { // 至少需要八个节点
+            throw std::runtime_error("Cell does not have enough nodes.");
+        }
+
+        // 获取节点坐标
+        std::vector<std::vector<double>> vertices(8);
+        for (int i = 0; i < 8; ++i) {
+            int nodeIndex = cell[i] - 1; // 从1开始的节点编号
+            if (nodeIndex < 0 || nodeIndex >= nodes.size()) {
+                std::cerr << "Error: Node index out of bounds." << std::endl;
+                throw std::runtime_error("Node index out of bounds.");
+            }
+            vertices[i] = nodes[nodeIndex];
+        }
+
+        // 计算体积（使用八面体分割法）
+        double volume = 0.0;
+        volume += (vertices[0][0] * vertices[1][1] * vertices[2][2] + 
+                    vertices[1][0] * vertices[2][1] * vertices[3][2] +
+                    vertices[2][0] * vertices[3][1] * vertices[0][2] +
+                    vertices[3][0] * vertices[0][1] * vertices[1][2]);
+        volume -= (vertices[1][0] * vertices[0][1] * vertices[2][2] +
+                    vertices[0][0] * vertices[1][1] * vertices[3][2] +
+                    vertices[2][0] * vertices[3][1] * vertices[1][2] +
+                    vertices[3][0] * vertices[2][1] * vertices[0][2]);
+
+        volume = std::abs(volume) / 6.0; // 体积公式
+
+        // 将体积添加到结果中
+        volumes.push_back(volume);
+    }
+
+    return Field(volumes);
+}
+
+
+
+// Mesh 类构造函数
+Mesh::Mesh(const std::string &filename) {
+    std::vector<std::vector<double>> nodes0;
+    parseNodes(filename, nodes0);
+    nodes = nodes0;
+    std::vector<std::vector<int>> faceInfo;
+    
+    parseFaces(filename, faceInfo);
+    Faces Faces0(nodes0, faceInfo); // 在这里赋值
+    faces =Faces0;
+    std::vector<std::vector<int>> cellsData0;
+    std::vector<std::vector<int>> celltreeData0;
+    parseFacetree(filename, celltreeData0);
+    cellsData0=processCelldata(faceInfo,celltreeData0);
+    Cells Cells0(nodes0, cellsData0); // 在这里赋值
+    cells =Cells0;
+}
+
+// 计算所有面中心点
+Field Mesh::calculateAllfaceCenters() const {
+    return faces.calculateAllCenters();
+}
+
+// 计算所有面法向量
+Field Mesh::calculateAllfaceNormals() const {
+    return faces.calculateAllNormals();
+}
+
+// 计算所有面面积
+Field Mesh::calculateAllfaceAreas() const {
+    return faces.calculateAllAreas();
+}
+
+// 计算所有单元中心点
+Field Mesh::calculateAllcellCenters() const {
+    return cells.calculateAllCenters();
+}
+
+// 计算所有单元体积
+Field Mesh::calculateAllcellVolumes() const {
+    return cells.calculateAllVolumes();
+}
+
+// 访问索引为 i 的面
+const std::vector<int>& Mesh::getFace(size_t i) const {
+    return faces.getFace(i);
+}
+
+// 修改 faces 中第一个元素为 i 的行的第二个元素
+void Mesh::setBctypeForFace(int zoneIndex, int bctype) {
+    faces.setBctypeForFace(zoneIndex, bctype);
 }
