@@ -455,6 +455,19 @@ Point Point::normalize() const {
 void Point::print() const {
     std::cout << "(" << coordinates[0] << ", " << coordinates[1] << ", " << coordinates[2] << ")\n";
 }
+// 获取坐标
+double Point::getCoordinate(size_t index) const {
+    if (index >= 3) throw std::out_of_range("Index out of range");
+    return coordinates[index];
+}
+
+// 设置坐标
+void Point::setCoordinate(size_t index, double value) {
+    if (index >= 3) throw std::out_of_range("Index out of range");
+    coordinates[index] = value;
+}
+        
+
 
 
 // 矢量场构造函数，接受一个 Point 向量，初始化为点（矢量）场
@@ -462,7 +475,16 @@ Field::Field(const std::vector<Point>& points) : isPointField(true), points(poin
 
 //标量场 构造函数，接受一个标量向量，初始化为标量场
 Field::Field(const std::vector<Scalar>& scalars) : isPointField(false), scalars(scalars) {}
-
+//长度和标量构造标量场
+Field::Field(size_t elementCount, Scalar value) : isPointField(false) {
+    scalars.resize(elementCount, value);
+}
+//长度和矢量构造矢量场
+Field::Field(size_t elementCount, const std::vector<double>& coordinates) : isPointField(true) {
+    for (size_t i = 0; i < elementCount; ++i) {
+        points.emplace_back(coordinates);
+    }
+}
 // 重载加法运算符，返回两个 Field 对象的和
 Field Field::operator+(const Field& other) const {
     checkCompatibility(other);
@@ -559,6 +581,58 @@ Field Field::dot(const Field& other) const {
     }
     return Field(result);
 }
+//场除标量
+Field Field::operator/(double scalar) const {
+    if (scalar == 0) {
+        throw std::invalid_argument("Division by zero.");
+    }
+    
+    // 创建结果对象，使用拷贝构造
+    Field result(*this); 
+
+    if (isPointField) {
+        // 如果是矢量场，逐个点进行除法
+        for (Point& p : result.points) {
+            p = p / scalar; // 调用 Point 的除法运算符
+        }
+    } else {
+        // 如果是标量场，逐个标量进行除法
+        for (Scalar& s : result.scalars) {
+            s /= scalar; // 直接对标量进行除法
+        }
+    }
+    
+    return result;
+}
+Field Field::operator/(const Field& other) const {
+    // 确保两个 Field 对象兼容
+    if (size() != other.size()) {
+        throw std::invalid_argument("两个 Field 对象大小不匹配");
+    }
+
+    // 根据被除的场类型初始化结果对象
+    if (isPointField && !other.isPointField) {
+        // 矢量场除以标量场，初始化结果为矢量场
+        Field result(size(), std::vector<double>(3, 0.0)); // 初始化矢量场
+        for (size_t i = 0; i < size(); ++i) {
+            for (size_t j = 0; j < 3; ++j) { // 三维空间
+                double newValue = points[i].getCoordinate(j) / other.scalarAt(i);
+                result.pointAt(i).setCoordinate(j, newValue);
+            }
+        }
+        return result; // 返回矢量场
+    } else if (!isPointField && !other.isPointField) {
+        // 标量场除以标量场，初始化结果为标量场
+        Field result(size(), 0.0); // 初始化标量场
+        for (size_t i = 0; i < size(); ++i) {
+            result.scalarAt(i) = scalars[i] / other.scalarAt(i);
+        }
+        return result; // 返回标量场
+    } else {
+        throw std::invalid_argument("不允许标量场除以矢量场或两个矢量场进行除法");
+    }
+}
+
 
 // 矢量场之间的叉乘
 Field Field::cross(const Field& other) const {
@@ -597,7 +671,7 @@ Field Field::normalize() const {
     return Field(normalizedPoints);
 }
 
-//访问场中某个点或标量
+//索引访问场中某个点或标量从0开始
 Point& Field::pointAt(size_t index) {
     return points[index];
 }
@@ -626,6 +700,11 @@ void Field::print() const {
         std::cout << std::endl;
     }
 }
+//场元素个数
+size_t Field::size() const {
+    return isPointField ? points.size() : scalars.size();
+}
+
 
 // 检查两个 Field 是否兼容
 void Field::checkCompatibility(const Field& other) const {
@@ -707,6 +786,7 @@ Field Faces::calculateAllCenters() const {
     return Field(centers);
 }
 
+
 //计算面法向量 由c1指向c0 n0 n1 n2确定
 Field Faces::calculateAllNormals() const {
     std::vector<Point> normals;
@@ -759,7 +839,7 @@ Field Faces::calculateAllNormals() const {
 
     return Field(normals);
 }
-
+//计算所有面面积
 Field Faces::calculateAllAreas() const {
     std::vector<Scalar> areas;
 
@@ -841,6 +921,34 @@ void Faces::setBctypeForFace(int zoneIndex, int bctype) {
     }
     throw std::runtime_error("Face with the specified index not found.");
 }
+//计算face个数
+size_t Faces::size() const {
+    return faces.size();
+}
+//修改场中的值
+void Field::setScalar(size_t index, Scalar value) {
+    if (!isPointField) {
+        if (index < scalars.size()) {
+            scalars[index] = value;
+        } else {
+            throw std::out_of_range("Index out of range for scalars.");
+        }
+    } else {
+        std::cerr << "Warning: Attempting to modify a scalar in a point field.\n";
+    }
+}
+
+void Field::setPoint(size_t index, const Point& point) {
+    if (isPointField) {
+        if (index < points.size()) {
+            points[index] = point;
+        } else {
+            throw std::out_of_range("Index out of range for points.");
+        }
+    } else {
+        std::cerr << "Warning: Attempting to modify a point in a scalar field.\n";
+    }
+}
 
 // cell集构造函数
 Cells::Cells() : nodes(), cells() {}
@@ -858,6 +966,7 @@ Cells::Cells(const std::vector<std::vector<double>>& nodeCoordinates,
     for (const auto& cell : cells) {
         if (cell.size() != 8) {
             throw std::invalid_argument("每个体必须包含8个电 .");
+            
         }
         // 检查节点编号的有效性（从1开始）
         for (int i = 2; i < 6; ++i) { // n0 到 n3
@@ -895,47 +1004,66 @@ Field Cells::calculateAllCenters() const {
 
     return Field(centers);
 }
-//计算cells体积
+//计算体积
 Field Cells::calculateAllVolumes() const {
     std::vector<Scalar> volumes;
 
     for (const auto& cell : cells) {
-        // 确保单元中包含足够的节点
-        if (cell.size() < 8) { // 至少需要八个节点
+        if (cell.size() < 8) {
             throw std::runtime_error("Cell does not have enough nodes.");
         }
 
         // 获取节点坐标
         std::vector<std::vector<double>> vertices(8);
         for (int i = 0; i < 8; ++i) {
-            int nodeIndex = cell[i] - 1; // 从1开始的节点编号
+            int nodeIndex = cell[i] - 1; 
             if (nodeIndex < 0 || nodeIndex >= nodes.size()) {
-                std::cerr << "Error: Node index out of bounds." << std::endl;
                 throw std::runtime_error("Node index out of bounds.");
             }
             vertices[i] = nodes[nodeIndex];
         }
 
-        // 计算体积（使用八面体分割法）
-        double volume = 0.0;
-        volume += (vertices[0][0] * vertices[1][1] * vertices[2][2] + 
-                    vertices[1][0] * vertices[2][1] * vertices[3][2] +
-                    vertices[2][0] * vertices[3][1] * vertices[0][2] +
-                    vertices[3][0] * vertices[0][1] * vertices[1][2]);
-        volume -= (vertices[1][0] * vertices[0][1] * vertices[2][2] +
-                    vertices[0][0] * vertices[1][1] * vertices[3][2] +
-                    vertices[2][0] * vertices[3][1] * vertices[1][2] +
-                    vertices[3][0] * vertices[2][1] * vertices[0][2]);
+        // 按z坐标排序
+        std::sort(vertices.begin(), vertices.end(), [](const std::vector<double>& a, const std::vector<double>& b) {
+            return a[2] < b[2];
+        });
 
-        volume = std::abs(volume) / 6.0; // 体积公式
+        // 获取z最大值的后四个点
+        std::vector<std::vector<double>> topVertices = {vertices[4], vertices[5], vertices[6], vertices[7]};
 
-        // 将体积添加到结果中
+        // 按逆时针排序点
+        std::vector<double> centroid = {0.0, 0.0};
+        for (const auto& v : topVertices) {
+            centroid[0] += v[0];
+            centroid[1] += v[1];
+        }
+        centroid[0] /= 4.0;
+        centroid[1] /= 4.0;
+
+        std::sort(topVertices.begin(), topVertices.end(), [&centroid](const std::vector<double>& a, const std::vector<double>& b) {
+            return atan2(a[1] - centroid[1], a[0] - centroid[0]) < atan2(b[1] - centroid[1], b[0] - centroid[0]);
+        });
+
+        // 计算面积
+        double area = 0.5 * std::abs(
+            topVertices[0][0] * (topVertices[1][1] - topVertices[3][1]) +
+            topVertices[1][0] * (topVertices[2][1] - topVertices[0][1]) +
+            topVertices[2][0] * (topVertices[3][1] - topVertices[1][1]) +
+            topVertices[3][0] * (topVertices[0][1] - topVertices[2][1])
+        );
+
+        // 计算体积
+        double volume = area * (vertices[7][2] - vertices[0][2]); // zmax - zmin
         volumes.push_back(volume);
     }
 
     return Field(volumes);
 }
 
+//计算cell个数
+size_t Cells::size() const {
+    return cells.size();
+}
 
 
 // Mesh 类构造函数
@@ -986,7 +1114,16 @@ const std::vector<int>& Mesh::getFace(size_t i) const {
     return faces.getFace(i);
 }
 
-// 修改 faces 中第一个元素为 i 的行的第二个元素
+// 修改 faces 中zoneid为i的行的边界条件
 void Mesh::setBctypeForFace(int zoneIndex, int bctype) {
     faces.setBctypeForFace(zoneIndex, bctype);
+}
+
+// 返回面和单元体数量
+size_t Mesh::numberOfFaces() const {
+    return faces.size();
+}
+
+size_t Mesh::numberOfCells() const {
+    return cells.size();
 }

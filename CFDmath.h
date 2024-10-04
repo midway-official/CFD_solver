@@ -62,7 +62,9 @@ public:
 
     // 打印点坐标
     void print() const;
-
+   // 访问坐标
+    double getCoordinate(size_t index) const; // 获取坐标
+    void setCoordinate(size_t index, double value); // 设置坐标
 private:
     std::vector<double> coordinates;
 };
@@ -71,11 +73,18 @@ class Field {
 public:
     Field(const std::vector<Point>& points);
     Field(const std::vector<Scalar>& scalars);
+    // 新增构造函数：使用标量初始化所有元素
+    Field(size_t elementCount, Scalar value);
 
+    // 新增构造函数：使用向量初始化所有点
+    Field(size_t elementCount, const std::vector<double>& coordinates);
     Field operator+(const Field& other) const;
     Field operator-(const Field& other) const;
     Field operator*(double scalar) const; // 矢量场与标量的乘法
     Field operator*(const Field& other) const; // 标量场与矢量场的乘法
+    Field operator/(double scalar) const; // 矢量场与标量的除法
+    Field operator/(const Field& other) const; // 元素级除法
+
     //友元函数，标量乘场
     friend Field operator*(double scalar, const Field& field);
 
@@ -92,7 +101,11 @@ public:
     // 针对标量的运算符重载 索引
     Scalar& scalarAt(size_t index);
     const Scalar& scalarAt(size_t index) const;
-
+    // 返回元素个数
+    size_t size() const;
+    //设置场中的点索引设置从0开始
+    void setScalar(size_t index, Scalar value);
+    void setPoint(size_t index, const Point& point);
 private:
     void checkCompatibility(const Field& other) const;
 
@@ -120,7 +133,8 @@ public:
 
     // 修改 faces 中第一个元素为 i 的行的第二个元素
     void setBctypeForFace(int zoneIndex, int bctype);
-
+    // 返回面元素数量
+    size_t size() const;
 private:
     std::vector<std::vector<double>> nodes; // 储存每个节点的三个坐标
     std::vector<std::vector<int>> faces;    // 储存面的信息
@@ -135,6 +149,8 @@ public:
      Field calculateAllCenters() const;
     //计算所有单元cell体积
      Field calculateAllVolumes() const;
+     // 返回控制体元素数量
+    size_t size() const;
 private:
     std::vector<std::vector<double>> nodes; // 储存每个节点的三个坐标
     std::vector<std::vector<int>> cells;    // 储存cell单元体的信息
@@ -158,6 +174,9 @@ public:
     const std::vector<int>& getFace(size_t i) const;
     //设置zoneid的边界条件
     void setBctypeForFace(int zoneIndex, int bctype);
+    // 新增功能：返回面和单元体数量
+    size_t numberOfFaces() const;
+    size_t numberOfCells() const;
 
 private:
     std::vector<std::vector<double>> nodes;
