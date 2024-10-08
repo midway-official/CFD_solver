@@ -1,4 +1,64 @@
 #include "CFDmath.h"  // 数学库头文件
+#include "FVM.h"
+using namespace std;
+
+string getBoundaryType(int bctype) {
+    map<int, string> boundaryTypes = {
+        {0x2, "interior"},
+        {0x3, "wall"},
+        {0x4, "pressure-inlet"},
+        {0x5, "pressure-outlet"},
+        {0x7, "symmetry"},
+        {0x8, "periodic-shadow"},
+        {0x9, "pressure-far-field"},
+        {0xa, "velocity-inlet"},
+        {0xc, "periodic"},
+        {0xe, "fan, porous-jump, radiator"},
+        {0x14, "mass-flow-inlet"},
+        {0x18, "Interface"},
+        {0x1f, "parent"},
+        {0x24, "outflow"},
+        {0x25, "axis"}
+    };
+
+    if (boundaryTypes.find(bctype) != boundaryTypes.end()) {
+        return boundaryTypes[bctype];
+    } else {
+        return "unknown";
+    }
+}
+
+vector<BoundaryCondition> parseBoundaryConditions(const string& filename) {
+    ifstream file(filename);
+    string line;
+    vector<BoundaryCondition> boundaryConditions;
+
+    // 检查文件是否正常打开
+    if (!file.is_open()) {
+        cerr << "无法打开文件: " << filename << endl;
+        return boundaryConditions;
+    }
+
+    // 正则表达式匹配 (39 (zoneid bctype regionName)
+    regex pattern(R"\(\d+\s+\((\d+)\s+(\w+)\s+(\w+)\)\s+\(\))");
+    smatch matches;
+
+    // 逐行解析文件
+    while (getline(file, line)) {
+        // 使用正则表达式查找符合格式的行
+        if (regex_search(line, matches, pattern)) {
+            BoundaryCondition bc;
+            bc.zoneid = stoi(matches[1].str()); // zoneid
+            bc.bctype = stoi(matches[2].str()); // bctype (十六进制形式)
+            bc.regionName = matches[3].str();    // regionName
+
+            boundaryConditions.push_back(bc);
+        }
+    }
+
+    return boundaryConditions;
+}
+
 Field calculateGradient(Field& P, Mesh& mesh) {
     Field gradientP(mesh.numberOfCells(), vector<double>{0, 0, 0});
     Field facearea = mesh.calculateAllfaceAreas();

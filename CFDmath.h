@@ -18,11 +18,11 @@ using std::vector;     // 简化使用 vector
 // 假设 Scalar 是 double 的别名
 using Scalar = double;
 //定义读取msh文件nodes信息函数
-void parseNodes(const std::string &filename, std::vector<std::vector<double>> &coordinates);
+void parseNodes(const std::string& filename, std::vector<std::vector<double>>& coordinates);
 //定义读取msh文件faces信息函数
-void parseFaces(const std::string &filename, std::vector<std::vector<int>> &faces);
+void parseFaces(const std::string& filename, std::vector<std::vector<int>>& faces);
 //定义读取msh文件facetree信息函数
-void parseFacetree(const std::string &filename, std::vector<std::vector<int>> &facetree);
+void parseFacetree(const std::string& filename, std::vector<std::vector<int>>& facetree);
 //定义生成celldata信息
 std::vector<std::vector<int>> processCelldata(std::vector<std::vector<int>> faceData, const std::vector<std::vector<int>>& facetree);
 // 打印二维整型向量中的最大值
@@ -50,19 +50,19 @@ public:
     Point operator-(const Point& other) const;
     Point operator*(double scalar) const;
     Point operator/(double scalar) const;
-  //叉乘^
+    //叉乘^
     Point operator^(const Point& other) const;
-//叉乘cross
+    //叉乘cross
     Point cross(const Point& other) const;
-//点乘
-   Scalar dot(const Point& other) const;
+    //点乘
+    Scalar dot(const Point& other) const;
     // 计算模长和单位化
     double magnitude() const;
     Point normalize() const;
 
     // 打印点坐标
     void print() const;
-   // 访问坐标
+    // 访问坐标
     double getCoordinate(size_t index) const; // 获取坐标
     void setCoordinate(size_t index, double value); // 设置坐标
 private:
@@ -93,8 +93,8 @@ public:
 
     Field magnitude() const;//求模
     Field normalize() const;//标准化
-    void print() const ;//打印场
-   // 针对点的运算符重载 索引从0开始
+    void print() const;//打印场
+    // 针对点的运算符重载 索引从0开始
     Point& pointAt(size_t index);
     const Point& pointAt(size_t index) const;
 
@@ -118,8 +118,8 @@ class Faces {
 public:
     // 构造函数
     Faces(const std::vector<std::vector<double>>& nodeCoordinates,
-          const std::vector<std::vector<int>>& faceInfo);
-     Faces();
+        const std::vector<std::vector<int>>& faceInfo);
+    Faces();
     // 打印面的信息
     void print() const;
     // 计算所有面的中心点返回矢量场
@@ -142,14 +142,14 @@ private:
 //cells单位体集
 class Cells {
 public:
-     Cells();
-     Cells(const std::vector<std::vector<double>>& nodeCoordinates,
+    Cells();
+    Cells(const std::vector<std::vector<double>>& nodeCoordinates,
         const std::vector<std::vector<int>>& cellsdata);
     //计算所有单元cell中心点
-     Field calculateAllCenters() const;
+    Field calculateAllCenters() const;
     //计算所有单元cell体积
-     Field calculateAllVolumes() const;
-     // 返回控制体元素数量
+    Field calculateAllVolumes() const;
+    // 返回控制体元素数量
     size_t size() const;
 private:
     std::vector<std::vector<double>> nodes; // 储存每个节点的三个坐标
@@ -159,7 +159,7 @@ private:
 class Mesh {
 public:
     //构造函数
-    Mesh(const std::string &filename);
+    Mesh(const std::string& filename);
     //计算所有面中心
     Field calculateAllfaceCenters() const;
     //计算所有面法向量
@@ -184,4 +184,6 @@ private:
     Cells cells;
 };
 
-#endif // CFDMATH_H
+
+
+#endif // CFDMATH_H#pragma once
