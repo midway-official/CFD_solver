@@ -1126,6 +1126,9 @@ Field Mesh::calculateAllcellVolumes() const {
 const std::vector<int>& Mesh::getFace(size_t i) const {
     return faces.getFace(i);
 }
+const std::vector<Scalar>& Mesh::getPoint(size_t i) const {
+    return nodes[i];
+}
 
 // 修改 faces 中zoneid为i的行的边界条件
 void Mesh::setBctypeForFace(int zoneIndex, int bctype) {
@@ -1141,6 +1144,6 @@ size_t Mesh::numberOfCells() const {
     return cells.size();
 }
 
-
-
-
+size_t Mesh::numberOfPoints() const {
+    return nodes.size();
+}

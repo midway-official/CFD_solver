@@ -171,13 +171,14 @@ public:
     //计算所有体体积
     Field calculateAllcellVolumes() const;
     //获得第i个面
-    const std::vector<int>& getFace(size_t i) const;
+    const vector<int>& getFace(size_t i) const;
+    const vector<double>& getPoint(size_t i) const;
     //设置zoneid的边界条件
     void setBctypeForFace(int zoneIndex, int bctype);
-    // 新增功能：返回面和单元体数量
+    // 返回面和单元体数量
     size_t numberOfFaces() const;
     size_t numberOfCells() const;
-
+    size_t numberOfPoints() const;
 private:
     std::vector<std::vector<double>> nodes;
     Faces faces;

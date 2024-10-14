@@ -3,21 +3,32 @@
 #include "CFDmath.h"
 
 using namespace std;
-//边界条件结构体
-struct BoundaryCondition {
-    int zoneid;
-    int bctype;
-    std::string regionName;
-};
-// 将十六进制的bctype转换为边界类型的描述
-std::string getBoundaryType(int bctype);
 
-// 解析网格文件中的边界条件并返回BoundaryCondition的向量
-std::vector<BoundaryCondition> parseBoundaryConditions(const std::string& filename);
+struct ZoneInfo {
+    int bctype;  // 边界条件类型
+    string bctypeText;  // 边界条件类型文本
+    bool allPointsMaxX = false;
+    bool allPointsMinX = false;
+    bool allPointsMaxY = false;
+    bool allPointsMinY = false;
+    bool allPointsMaxZ = false;
+    bool allPointsMinZ = false;
+};
+
+
+
+class MeshAnalyzer {
+public:
+    map<int, ZoneInfo> analyzeMesh(const Mesh& mesh);
+    void printZoneInfo(const map<int, ZoneInfo>& zoneInfoMap);
+private:
+    void calculateGlobalExtrema(const Mesh& mesh, double& globalMaxX, double& globalMinX, double& globalMaxY, double& globalMinY, double& globalMaxZ, double& globalMinZ);
+};
+
 
 // 函数声明 
-//梯度计算
-Field calculateGradient(Field& P, Mesh& mesh);
+//梯度计算(zoneid, bctype, n0, n1, n2, n3, c0, c1)
+Field calculateGradient(Field& P, Mesh& mesh,Scalar P_farfield);
 //散度计算
-Field calculateDivergence(Field& U, Mesh& mesh);
+Field calculateDivergence(Field& U, Mesh& mesh,Point U_wall);
 #endif // 
