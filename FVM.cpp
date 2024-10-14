@@ -25,7 +25,26 @@ map<int, string> boundaryTypes = {
     {36, "outflow"},
     {37, "axis"}
 };
+//组装速度场
+std::vector<std::vector<Scalar>> combineVectors(const std::vector<double>& vec1, 
+                                                const std::vector<double>& vec2, 
+                                                const std::vector<double>& vec3) {
+    // 检查输入向量的长度是否相同
+    if (vec1.size() != vec2.size() || vec1.size() != vec3.size()) {
+        throw std::invalid_argument("All vectors must have the same length.");
+    }
 
+    // 创建一个三列的vector<vector<Scalar>>
+    std::vector<std::vector<Scalar>> combined(vec1.size(), std::vector<Scalar>(3));
+
+    for (size_t i = 0; i < vec1.size(); ++i) {
+        combined[i][0] = vec1[i]; // 第一列
+        combined[i][1] = vec2[i]; // 第二列
+        combined[i][2] = vec3[i]; // 第三列
+    }
+
+    return combined;
+}
 // 计算整个网格的 x, y, z 最大最小值
 void MeshAnalyzer::calculateGlobalExtrema(const Mesh& mesh, double& globalMaxX, double& globalMinX, double& globalMaxY, double& globalMinY, double& globalMaxZ, double& globalMinZ) {
     globalMaxX = globalMaxY = globalMaxZ = -numeric_limits<double>::infinity();
@@ -120,6 +139,192 @@ void MeshAnalyzer::printZoneInfo(const map<int, ZoneInfo>& zoneInfoMap) {
         cout << endl;
     }
 }
+
+// 构造函数
+GaussSeidel::GaussSeidel(double tolerance, int maxIterations)
+    : tolerance(tolerance), maxIterations(maxIterations) {}
+
+std::vector<double> GaussSeidel::solve(const std::vector<std::vector<double>>& A, const std::vector<double>& b) {
+    int n = A.size(); // 系数矩阵的行数
+    std::vector<double> x(n, 0.0); // 初始化解向量
+
+    for (int k = 0; k < maxIterations; ++k) {
+        std::vector<double> x_old = x; // 记录上一次的解
+
+        for (int i = 0; i < n; ++i) {
+            double sum = 0.0;
+
+            // 计算 A[i][j] * x[j] 的和
+            for (int j = 0; j < n; ++j) {
+                if (j != i) {
+                    sum += A[i][j] * x[j];
+                }
+            }
+
+            // 更新当前变量
+            x[i] = (b[i] - sum) / A[i][i];
+        }
+
+        // 计算残差 r = b - A * x
+        double residual_sum = 0.0;
+        for (int i = 0; i < n; ++i) {
+            double sum = 0.0;
+            for (int j = 0; j < n; ++j) {
+                sum += A[i][j] * x[j];
+            }
+            residual_sum += fabs(b[i] - sum); // 计算残差的绝对值，并累加
+        }
+
+        // 输出当前迭代的残差总和
+        std::cout << "Iteration " << k + 1 << ", Residual sum: " << residual_sum << std::endl;
+
+        // 检查收敛性：比较新旧解之间的变化量
+        double norm = 0.0;
+        for (int i = 0; i < n; ++i) {
+            norm += pow(x[i] - x_old[i], 2);
+        }
+        norm = sqrt(norm);
+
+        if (norm < tolerance) {
+            std::cout << "Converged after " << k + 1 << " iterations." << std::endl;
+            return x;
+        }
+    }
+
+    std::cout << "Max iterations reached." << std::endl;
+    return x; // 如果没有收敛，返回最后的解
+}
+
+
+
+GaussSeidel3D::GaussSeidel3D(double tolerance, int maxIterations, double relaxationFactor)
+    : tolerance(tolerance), maxIterations(maxIterations), relaxationFactor(relaxationFactor) {}
+
+std::vector<std::vector<double>> GaussSeidel3D::solve(const std::vector<std::vector<double>>& A,
+                                                       const std::vector<double>& b0X,
+                                                       const std::vector<double>& b0Y,
+                                                       const std::vector<double>& b0Z) {
+    int n = A.size(); // 系数矩阵的行数
+    std::vector<std::vector<double>> x(n, std::vector<double>(3, 0.0)); // 初始化解向量为0
+
+    for (int k = 0; k < maxIterations; ++k) {
+        std::vector<std::vector<double>> x_old = x; // 记录上一次的解
+
+        for (int i = 0; i < n; ++i) {
+            // 计算 A[i][j] * x[j] 的和
+            double sumX = 0.0, sumY = 0.0, sumZ = 0.0;
+            for (int j = 0; j < n; ++j) {
+                if (j != i) {
+                    sumX += A[i][j] * x[j][0];
+                    sumY += A[i][j] * x[j][1];
+                    sumZ += A[i][j] * x[j][2];
+                }
+            }
+
+            // 更新当前变量，加入松弛因子
+            x[i][0] = (1 - relaxationFactor) * x_old[i][0] + 
+                       (relaxationFactor / A[i][i]) * (b0X[i] - sumX); // 更新 x 分量
+            x[i][1] = (1 - relaxationFactor) * x_old[i][1] + 
+                       (relaxationFactor / A[i][i]) * (b0Y[i] - sumY); // 更新 y 分量
+            x[i][2] = (1 - relaxationFactor) * x_old[i][2] + 
+                       (relaxationFactor / A[i][i]) * (b0Z[i] - sumZ); // 更新 z 分量
+        }
+
+        // 计算残差 r = b - A * x
+        double residual_sum = 0.0;
+        for (int i = 0; i < n; ++i) {
+            double AxX = 0.0, AxY = 0.0, AxZ = 0.0;
+            for (int j = 0; j < n; ++j) {
+                AxX += A[i][j] * x[j][0];
+                AxY += A[i][j] * x[j][1];
+                AxZ += A[i][j] * x[j][2];
+            }
+            residual_sum += fabs(b0X[i] - AxX) + fabs(b0Y[i] - AxY) + fabs(b0Z[i] - AxZ);
+        }
+
+        // 输出当前迭代的残差总和
+        std::cout << "Iteration " << k + 1 << ", Residual sum: " << residual_sum << std::endl;
+
+        // 检查收敛性：比较新旧解之间的变化量
+        double norm = 0.0;
+        for (int i = 0; i < n; ++i) {
+            norm += pow(x[i][0] - x_old[i][0], 2) + pow(x[i][1] - x_old[i][1], 2) + pow(x[i][2] - x_old[i][2], 2);
+        }
+        norm = sqrt(norm);
+
+        if (norm < tolerance) {
+            std::cout << "Converged after " << k + 1 << " iterations." << std::endl;
+            return x; // 返回解向量
+        }
+    }
+
+    std::cout << "Max iterations reached." << std::endl;
+    return x; // 如果没有收敛，返回最后的解
+}
+
+Jacobi3D::Jacobi3D(double tolerance, int maxIterations)
+    : tolerance(tolerance), maxIterations(maxIterations) {}
+
+std::vector<std::vector<double>> Jacobi3D::solve(const std::vector<std::vector<double>>& A,
+                                                  const std::vector<double>& b0X,
+                                                  const std::vector<double>& b0Y,
+                                                  const std::vector<double>& b0Z) {
+    int n = A.size(); // 系数矩阵的行数
+    std::vector<std::vector<double>> x(n, std::vector<double>(3, 0.0)); // 初始化解向量为0
+
+    for (int k = 0; k < maxIterations; ++k) {
+        std::vector<std::vector<double>> x_new = x; // 新的解向量
+
+        for (int i = 0; i < n; ++i) {
+            double sumX = 0.0, sumY = 0.0, sumZ = 0.0;
+            for (int j = 0; j < n; ++j) {
+                if (j != i) {
+                    sumX += A[i][j] * x[j][0]; // 使用前一次的解
+                    sumY += A[i][j] * x[j][1];
+                    sumZ += A[i][j] * x[j][2];
+                }
+            }
+
+            // 更新当前变量
+            x_new[i][0] = (b0X[i] - sumX) / A[i][i]; // 更新 x 分量
+            x_new[i][1] = (b0Y[i] - sumY) / A[i][i]; // 更新 y 分量
+            x_new[i][2] = (b0Z[i] - sumZ) / A[i][i]; // 更新 z 分量
+        }
+
+        // 计算残差 r = b - A * x
+        double residual_sum = 0.0;
+        for (int i = 0; i < n; ++i) {
+            double AxX = 0.0, AxY = 0.0, AxZ = 0.0;
+            for (int j = 0; j < n; ++j) {
+                AxX += A[i][j] * x_new[j][0];
+                AxY += A[i][j] * x_new[j][1];
+                AxZ += A[i][j] * x_new[j][2];
+            }
+            residual_sum += fabs(b0X[i] - AxX) + fabs(b0Y[i] - AxY) + fabs(b0Z[i] - AxZ);
+        }
+
+        // 输出当前迭代的残差总和
+        std::cout << "Iteration " << k + 1 << ", Residual sum: " << residual_sum << std::endl;
+
+        // 检查收敛性：比较新旧解之间的变化量
+        double norm = 0.0;
+        for (int i = 0; i < n; ++i) {
+            norm += pow(x_new[i][0] - x[i][0], 2) + pow(x_new[i][1] - x[i][1], 2) + pow(x_new[i][2] - x[i][2], 2);
+        }
+        norm = sqrt(norm);
+
+        if (norm < tolerance) {
+            std::cout << "Converged after " << k + 1 << " iterations." << std::endl;
+            return x_new; // 返回新的解向量
+        }
+
+        x = x_new; // 更新解向量
+    }
+
+    std::cout << "Max iterations reached." << std::endl;
+    return x; // 如果没有收敛，返回最后的解
+}
+//函数区域
 // 函数：计算压力梯度
 Field calculateGradient(Field& P, Mesh& mesh,Scalar P_farfield) {
     Field gradientP(mesh.numberOfCells(), vector<double>{0, 0, 0});
@@ -277,4 +482,227 @@ Field calculateDivergence(Field& U, Mesh& mesh, Point U_wall) {
 
     // 确保在for循环结束后返回结果
     return divergenceU / cellVol;
+}
+//使用时右侧乘v
+void separateLaplace(Mesh& mesh, Scalar gramma, vector<vector<Scalar>>& A, vector<Scalar>& b) {
+    int n = mesh.numberOfCells();
+    
+    Field facearea = mesh.calculateAllfaceAreas();
+    Field facenorm = mesh.calculateAllfaceNormals();
+    Field cellVol = mesh.calculateAllcellVolumes();
+    Field cellCenter = mesh.calculateAllcellCenters();
+    Field faceCenter = mesh.calculateAllfaceCenters();
+
+    
+    for (size_t i = 0; i < mesh.numberOfFaces(); i++) {
+        int bctype = mesh.getFace(i)[1]; // 获取bctype
+   
+        
+        // 在 switch 语句外部声明变量
+        size_t c0, c1; // 定义 c0 和 c1
+        Scalar distance, area, Vol, dS;
+
+        switch (bctype) {
+            case 2: // 内部面
+                c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
+                c1 = mesh.getFace(i)[7] - 1;
+
+                distance = (cellCenter.pointAt(c0) - cellCenter.pointAt(c1)).magnitude();
+                area = facearea.scalarAt(i);
+                
+                dS = -gramma * area / (distance );
+
+                A[c0][c0] += dS;
+                A[c1][c0] -= dS;
+                A[c0][c1] -= dS;
+                A[c1][c1] += dS;
+                break;
+
+            case 9: // 压力远场
+                c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
+                
+                distance = (cellCenter.pointAt(c0) - faceCenter.pointAt(i)).magnitude();
+                area = facearea.scalarAt(i);
+              
+                dS = -gramma * area / (distance );
+
+                A[c0][c0] += dS;
+                b[c0] += 0 * dS; // 边界上压强为0
+                break;
+
+            case 3: // 壁面
+            case 36: // 零压梯度
+                c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
+               
+                A[c0][c0] += 0 * dS; // 不影响
+                b[c0] += 0 * dS;
+                break;
+
+            default:
+                break;
+        }
+    }
+}
+
+//使用时右侧乘v
+void separateConvective(Mesh& mesh, Scalar rho, vector<vector<Scalar>>& A, vector<Scalar>& b,Field Uf,Point Vw ){
+     int n = mesh.numberOfCells();
+    
+    Field facearea = mesh.calculateAllfaceAreas();
+    Field facenorm = mesh.calculateAllfaceNormals();
+    Field cellVol = mesh.calculateAllcellVolumes();
+    Field cellCenter = mesh.calculateAllcellCenters();
+    Field faceCenter = mesh.calculateAllfaceCenters();
+
+   
+    for (size_t i = 0; i < mesh.numberOfFaces(); i++) {
+        int bctype = mesh.getFace(i)[1]; // 获取bctype
+   
+        
+        // 在 switch 语句外部声明变量
+        size_t c0, c1; // 定义 c0 和 c1
+        Scalar distance, area, Vol, dS,mf;
+        Point u0,u1;
+        switch (bctype) {
+            case 2: // 内部面
+                c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
+                c1 = mesh.getFace(i)[7] - 1;
+                u0=  Uf.pointAt(c0);
+                u1=  Uf.pointAt(c1);
+                area = facearea.scalarAt(i);
+                if ((facenorm.pointAt(i)).dot(u1) >= 0)//速度从c1流向c0
+                {
+                    mf=-u1.dot(facenorm.pointAt(i))*area*rho;//流入为负
+                    }else{
+                    mf=-u0.dot(facenorm.pointAt(i))*area*rho;//流出为正
+                }
+                if (mf >=0)
+                {
+                    A[c0][c0] +=mf;
+                    A[c1][c0] -=mf;
+                }
+                else
+                {
+                    A[c0][c1] +=mf;
+                    A[c1][c1] -=mf;
+                }
+                
+               
+                
+                break;
+            case 36: //零压梯度
+            case 9: // 压力远场
+                c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
+                
+                u0=  Uf.pointAt(c0);
+                u1=  Point(vector<Scalar>(3,0));
+                area = facearea.scalarAt(i);
+                if ((facenorm.pointAt(i)).dot(u0) >= 0)//速度从c1流向c0
+                {
+                    mf=-u1.dot(facenorm.pointAt(i))*area*rho;//流入为负
+                    }else{
+                    mf=-u0.dot(facenorm.pointAt(i))*area*rho;//流出为正
+                }
+                if (mf >=0)
+                {
+                    A[c0][c0] +=mf;
+                    
+                }
+                else
+                {
+                    
+                    b[c0]-=mf;
+                }
+                
+
+            case 3: // 壁面
+           
+                 c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
+                
+                u0=  Uf.pointAt(c0);
+                u1=  Vw;
+                area = facearea.scalarAt(i);
+                if ((facenorm.pointAt(i)).dot(u0) >= 0)//速度从c1流向c0
+                {
+                    mf=-u1.dot(facenorm.pointAt(i))*area*rho;//流入为负
+                    }else{
+                    mf=-u0.dot(facenorm.pointAt(i))*area*rho;//流出为正
+                }
+                if (mf >=0)
+                {
+                    A[c0][c0] +=mf;
+                    
+                }
+                else
+                {
+                    
+                    b[c0]-=mf;
+                }
+                break;
+
+            default:
+                break;
+        }
+    }
+    
+
+}
+void separateLaplaceP(Mesh& mesh, Scalar gramma, vector<vector<Scalar>>& A, vector<Scalar>& b,vector<vector<Scalar>>& AP) {
+    int n = mesh.numberOfCells();
+    
+    Field facearea = mesh.calculateAllfaceAreas();
+    Field facenorm = mesh.calculateAllfaceNormals();
+    Field cellVol = mesh.calculateAllcellVolumes();
+    Field cellCenter = mesh.calculateAllcellCenters();
+    Field faceCenter = mesh.calculateAllfaceCenters();
+
+    
+    for (size_t i = 0; i < mesh.numberOfFaces(); i++) {
+        int bctype = mesh.getFace(i)[1]; // 获取bctype
+   
+        
+        // 在 switch 语句外部声明变量
+        size_t c0, c1; // 定义 c0 和 c1
+        Scalar distance, area, Vol, dS;
+
+        switch (bctype) {
+            case 2: // 内部面
+                c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
+                c1 = mesh.getFace(i)[7] - 1;
+
+                distance = (cellCenter.pointAt(c0) - cellCenter.pointAt(c1)).magnitude();
+                area = facearea.scalarAt(i);
+                
+                dS = -gramma * area / (distance );
+
+                A[c0][c0] +=AP[c0][c0]*dS /cellVol.scalarAt(c0) ;
+                A[c1][c0] -= AP[c1][c1]*dS /cellVol.scalarAt(c1);
+                A[c0][c1] -= AP[c0][c0]*dS /cellVol.scalarAt(c0);
+                A[c1][c1] += AP[c1][c1]*dS /cellVol.scalarAt(c1);
+                break;
+
+            case 9: // 压力远场
+                c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
+                
+                distance = (cellCenter.pointAt(c0) - faceCenter.pointAt(i)).magnitude();
+                area = facearea.scalarAt(i);
+              
+                dS = -gramma * area / (distance );
+
+                A[c0][c0] += AP[c0][c0]*dS /cellVol.scalarAt(c0);
+                b[c0] += 0 *AP[c0][c0]*dS /cellVol.scalarAt(c0); // 边界上压强为0
+                break;
+
+            case 3: // 壁面
+            case 36: // 零压梯度
+                c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
+               
+                A[c0][c0] += 0 * AP[c0][c0]*dS /cellVol.scalarAt(c0); // 不影响
+                b[c0] += 0 * AP[c0][c0]*dS /cellVol.scalarAt(c0);
+                break;
+
+            default:
+                break;
+        }
+    }
 }

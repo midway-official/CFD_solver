@@ -39,10 +39,15 @@ void printFaces(const std::vector<std::vector<int>>& faces);
 
 // 打印子向量的最大长度
 void printMaxSubvectorLength(const std::vector<std::vector<int>>& vec);
+// 向量加法函数声明
+std::vector<double> addVectors(const std::vector<double>& vec1, const std::vector<double>& vec2);
 
 //点类定义
 class Point {
 public:
+    // 默认构造函数
+    Point() : coordinates(3, 0.0) {} // 初始化为长度为3，所有元素为0.0
+
     Point(const std::vector<double>& coordinates);
 
     // 运算符重载
@@ -78,6 +83,9 @@ public:
 
     // 新增构造函数：使用向量初始化所有点
     Field(size_t elementCount, const std::vector<double>& coordinates);
+
+    // 新增构造函数：使用二维标量向量初始化三维向量场
+    Field(const std::vector<std::vector<Scalar>>& vectorField);
     Field operator+(const Field& other) const;
     Field operator-(const Field& other) const;
     Field operator*(double scalar) const; // 矢量场与标量的乘法
@@ -106,6 +114,17 @@ public:
     //设置场中的点索引设置从0开始
     void setScalar(size_t index, Scalar value);
     void setPoint(size_t index, const Point& point);
+    // 返回场的内容：矢量场或标量场
+     // 获取标量场
+    std::vector<Scalar> getScalarVector() const;
+    // 新增：获取向量场的 x、y、z 分量
+    std::vector<double> getXComponent() const;
+    std::vector<double> getYComponent() const;
+    std::vector<double> getZComponent() const;
+
+    // 获取点场
+    std::vector<std::vector<Scalar>> getPointVector() const;
+
 private:
     void checkCompatibility(const Field& other) const;
 

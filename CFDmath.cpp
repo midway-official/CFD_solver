@@ -372,7 +372,26 @@ void printMaxSubvectorLength(const std::vector<std::vector<int>>& vec) {
     std::cout << maxLength << std::endl; // 打印最大子向量长度
 }
 
+
+// 向量加法函数定义
+std::vector<double> addVectors(const std::vector<double>& vec1, const std::vector<double>& vec2) {
+    // 检查向量大小是否相同
+    if (vec1.size() != vec2.size()) {
+        throw std::invalid_argument("Error: Vectors must be of the same size.");
+    }
+
+    std::vector<double> result(vec1.size()); // 初始化结果向量
+
+    // 按元素相加
+    for (size_t i = 0; i < vec1.size(); ++i) {
+        result[i] = vec1[i] + vec2[i];
+    }
+
+    return result; // 返回结果向量
+}
+
 // point构造函数
+
 Point::Point(const std::vector<double>& coordinates) {
     if (coordinates.size() != 3) {
         throw std::invalid_argument("必须使用长度为3的矢量构造点");
@@ -483,6 +502,18 @@ Field::Field(size_t elementCount, Scalar value) : isPointField(false) {
 Field::Field(size_t elementCount, const std::vector<double>& coordinates) : isPointField(true) {
     for (size_t i = 0; i < elementCount; ++i) {
         points.emplace_back(coordinates);
+    }
+}
+// 实现新增构造函数
+Field::Field(const std::vector<std::vector<Scalar>>& vectorField) {
+    if (vectorField.empty() || vectorField[0].size() != 3) {
+        throw std::invalid_argument("Each element of the vectorField must have exactly three components.");
+    }
+
+    isPointField = true; // 设置为点场
+    points.resize(vectorField.size());
+    for (size_t i = 0; i < vectorField.size(); ++i) {
+        points[i] = Point(vectorField[i]); // 初始化 Point 对象
     }
 }
 // 重载加法运算符，返回两个 Field 对象的和
@@ -713,7 +744,48 @@ void Field::print() const {
 size_t Field::size() const {
     return isPointField ? points.size() : scalars.size();
 }
+// 获取标量场
+std::vector<Scalar> Field::getScalarVector() const {
+    return scalars; // 直接返回标量场数据
+}
 
+// 获取点场
+std::vector<std::vector<Scalar>> Field::getPointVector() const {
+    std::vector<std::vector<Scalar>> result;
+
+    // 遍历 points，将每个点的坐标放入 result
+    for (const auto& point : points) {
+        result.push_back({point.getCoordinate(0), point.getCoordinate(1), point.getCoordinate(2)});
+    }
+
+    return result; // 返回点场数据
+}
+// 获取向量场的 x 分量
+std::vector<double> Field::getXComponent() const {
+    std::vector<double> xComponents;
+    for (const auto& point : points) {
+        xComponents.push_back(point.getCoordinate(0)); // 获取 x 坐标
+    }
+    return xComponents;
+}
+
+// 获取向量场的 y 分量
+std::vector<double> Field::getYComponent() const {
+    std::vector<double> yComponents;
+    for (const auto& point : points) {
+        yComponents.push_back(point.getCoordinate(1)); // 获取 y 坐标
+    }
+    return yComponents;
+}
+
+// 获取向量场的 z 分量
+std::vector<double> Field::getZComponent() const {
+    std::vector<double> zComponents;
+    for (const auto& point : points) {
+        zComponents.push_back(point.getCoordinate(2)); // 获取 z 坐标
+    }
+    return zComponents;
+}
 
 // 检查两个 Field 是否兼容
 void Field::checkCompatibility(const Field& other) const {
