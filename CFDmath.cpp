@@ -592,7 +592,7 @@ Field Field::operator*(const Field& other) const {
     else if (!isPointField && other.isPointField) {
         // 当前是标量场，另一个是点场
         if (scalars.size() != other.points.size()) {
-            throw std::invalid_argument("矢量场与标量场大小不相容d.");
+            throw std::invalid_argument("矢量场与标量场大小不相容.");
         }
         std::vector<Point> result;
         for (size_t i = 0; i < other.points.size(); ++i) {
@@ -600,11 +600,21 @@ Field Field::operator*(const Field& other) const {
         }
         return Field(result);
     }
+    else if (!isPointField && !other.isPointField) {
+        // 当前和另一个都是标量场
+        if (scalars.size() != other.scalars.size()) {
+            throw std::invalid_argument("两个标量场大小不相容.");
+        }
+        std::vector<double> result;
+        for (size_t i = 0; i < scalars.size(); ++i) {
+            result.push_back(scalars[i] * other.scalars[i]); // 标量场逐元素相乘
+        }
+        return Field(result);
+    }
     else {
-        throw std::invalid_argument("必须是一个矢量场一个标量场.");
+        throw std::invalid_argument("必须是一个矢量场一个标量场，或两个标量场.");
     }
 }
-
 // 矢量场之间的点乘
 Field Field::dot(const Field& other) const {
     checkCompatibility(other);

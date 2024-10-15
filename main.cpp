@@ -1,8 +1,9 @@
-
 #include "CFDmath.h"  // 确保包含头文件
 #include "FVM.h"
 using namespace std;
-string filename = "2.msh"; // 输入文件名
+
+string filename = "small.msh"; // 输入文件名
+
 // 打印矩阵 A
 void printMatrix(const vector<vector<Scalar>>& A) {
     for (const auto& row : A) {
@@ -12,6 +13,8 @@ void printMatrix(const vector<vector<Scalar>>& A) {
         cout << endl;
     }
 }
+
+// 判断矩阵是否为对角主导
 bool isDiagonallyDominant(const std::vector<std::vector<double>>& A) {
     int n = A.size(); // 矩阵的行数
     for (int i = 0; i < n; ++i) {
@@ -32,6 +35,7 @@ bool isDiagonallyDominant(const std::vector<std::vector<double>>& A) {
     }
     return true; // 如果所有行都满足对角主导性，返回 true
 }
+
 // 打印向量 b
 void printVector(const vector<Scalar>& b) {
     for (const auto& value : b) {
@@ -39,6 +43,7 @@ void printVector(const vector<Scalar>& b) {
     }
     cout << endl;
 }
+
 int countZeroDiagonal(const std::vector<std::vector<double>>& matrix) {
     int n = matrix.size();  // 获取矩阵的大小
     int count = 0;
@@ -52,104 +57,124 @@ int countZeroDiagonal(const std::vector<std::vector<double>>& matrix) {
 
     return count;
 }
-int main(){
-    /*
-     cout << "开始读取网格"  << endl;
+
+int main() {
+    cout << "开始读取网格" << endl;
     Mesh mesh(filename);
-     cout << "完成网格读取,mesh对象创建"  << endl;
-     cout << "网格基本信息"  << endl;
-    Field facecenter= mesh.calculateAllfaceCenters();
-    Field facearea=mesh.calculateAllfaceAreas();
-    Field facenorm=mesh.calculateAllfaceNormals();
-    Field faceVol=mesh.calculateAllcellVolumes();
+    cout << "完成网格读取, mesh对象创建" << endl;
+    cout << "网格基本信息" << endl;
+
+    Field facecenter = mesh.calculateAllfaceCenters();
+    Field facearea = mesh.calculateAllfaceAreas();
+    Field facenorm = mesh.calculateAllfaceNormals();
+    Field faceVol = mesh.calculateAllcellVolumes();
     size_t n = mesh.numberOfCells();
     MeshAnalyzer analyzer;
 
-    // 分析 mesh 并打印 zone 信息
- 
-    //修改出流边界，零压梯度
-    mesh.setBctypeForFace(11,36);
-     auto zoneInfo = analyzer.analyzeMesh(mesh);
+    // 修改出流边界，零压梯度
+    mesh.setBctypeForFace(11, 36);
+    auto zoneInfo = analyzer.analyzeMesh(mesh);
     analyzer.printZoneInfo(zoneInfo);
-    //边界条件
+    
+    // 边界条件
     Point U_wall(vector<Scalar>{-1.0, 0.0, 0.0});
     
-
-   
-   //simple算法
-   //初始化
+    // 初始猜解初始化
     Field P0(mesh.numberOfCells(), 0.0);
-    Field U0(mesh.numberOfCells(), vector<Scalar>{-1, 0.0, 0.0});    
-    vector<vector<Scalar>> A0(n, std::vector<Scalar>(n, 0.0));
-    vector<vector<Scalar>> A1(n, std::vector<Scalar>(n, 0.0));
-    vector<Scalar> b0(n, 0);
-    vector<Scalar> b1(n, 0);
-
-    //解动量方程
-    //求压力梯度
-    Field gradientP=calculateGradient(P0, mesh , 0.0);
-    Field DvP=(-1*gradientP*faceVol); // 确保 b 的大小与单元体数量相同
-    //组装b
- 
-    //离散对流项,更新A0和b0
-    separateConvective(mesh,1,A0,b0,U0,U_wall);
-    vector<Scalar> b0X=addVectors(DvP.getXComponent(),b0);
-    vector<Scalar> b0Y=addVectors(DvP.getYComponent(),b0);
-    vector<Scalar> b0Z=addVectors(DvP.getZComponent(),b0);
-    GaussSeidel solver(10e-5,10);
+    Field U0(mesh.numberOfCells(), std::vector<Scalar>{0.0, 0.0, 0.0});
     
-    
-    GaussSeidel3D gs(0.1,20,0.1); // 创建高斯-赛德尔3D求解器实例
-    auto solution = gs.solve(A0,b0X,b0Y,b0Z); // 调用求解器
+    // 创建矩阵和源项（仅初始化一次）
+    std::vector<std::vector<Scalar>> A0(mesh.numberOfCells(), std::vector<Scalar>(mesh.numberOfCells(), 0.0));
+    std::vector<std::vector<Scalar>> A1(mesh.numberOfCells(), std::vector<Scalar>(mesh.numberOfCells(), 0.0));
 
-    // 输出结果
-    std::cout << "\nSolution:" << std::endl;
-    for (size_t i = 0; i < solution.size(); i++) {
-        std::cout << "x[" << i << "] = (" 
-                  << solution[i][0] << ", " << solution[i][1] << ", " << solution[i][2] << ")" << std::endl; // 输出解向量
-    }
-    */
-     // 示例三维矢量方程组
-    int n = 2; // 设定有两个方程
-    std::vector<std::vector<double>> A = {
-        {2, 1}, // 对应于 A[0]
-        {1, 2}  // 对应于 A[1]
-    };
+    std::vector<Scalar> scalarVector; // 声明用于存储散度值的向量
+    for (int iter = 0; iter < 100; ++iter) {
+        // 将 A0 和 A1 重置为全零
+        std::cout << "当前迭代轮数: " << iter + 1 << std::endl; // 打印当前轮数
+        std::fill(A0.begin(), A0.end(), std::vector<Scalar>(mesh.numberOfCells(), 0.0));
+        std::fill(A1.begin(), A1.end(), std::vector<Scalar>(mesh.numberOfCells(), 0.0));
 
-    // 使用三个分量表示 b 的三维矢量
-    std::vector<double> b0X = {5, 4}; // 常数矢量分量 X
-    std::vector<double> b0Y = {3, 2}; // 常数矢量分量 Y
-    std::vector<double> b0Z = {0, 0}; // 常数矢量分量 Z
-
-    GaussSeidel3D gs(1e-10, 1000, 1.0); // 创建高斯-赛德尔3D求解器实例，松弛因子为1.0（无松弛）
-    auto solution = gs.solve(A, b0X, b0Y, b0Z); // 调用求解器
-
-    // 输出解中模长最大的向量
-    std::vector<double> maxVector(3, 0.0);
-    double maxLength = 0.0;
-
-    for (const auto& vec : solution) {
-        double length = sqrt(pow(vec[0], 2) + pow(vec[1], 2) + pow(vec[2], 2)); // 计算模长
-        if (length > maxLength) {
-            maxLength = length;
-            maxVector = vec; // 更新最大模长的向量
-        }
-    }
-
-    // 输出结果
-    std::cout << "\nSolution:" << std::endl;
-    for (size_t i = 0; i < solution.size(); i++) {
-        std::cout << "x[" << i << "] = (" 
-                  << solution[i][0] << ", " << solution[i][1] << ", " << solution[i][2] << ")" << std::endl; // 输出解向量
-    }
-
-    // 输出模长最大的向量
-    std::cout << "\nThe vector with the maximum length is: (" 
-              << maxVector[0] << ", " << maxVector[1] << ", " << maxVector[2] << ")" 
-              << " with length: " << maxLength << std::endl;
-
- 
-
-    return 0;
-    }
+        // 1. 解动量方程
+        Field gradientP = calculateGradient(P0, mesh, 0.0);
+        Field DvP = (-1 * gradientP * faceVol);
         
+        // 组装 b0（只更新源项 b0，而不是重新初始化）
+        std::vector<std::vector<Scalar>> b0 = DvP.getPointVector();
+        
+        // 离散对流项, 更新 A0 和 b0
+        separateConvective(mesh, 1, A0, b0, U0, U_wall);  // 更新 A0, b0
+        separateLaplaceU(mesh,0.0012,A0,b0,U_wall);
+        // 使用高斯赛德尔求解器解动量方程
+        GaussSeidel3D gs3D; // 参数为收敛精度和最大迭代次数
+        auto solution = gs3D.solve(A0, b0);
+        Field U1(solution);
+        U1.print();
+
+        // 2. 计算新的速度场的散度
+        Field DivU = calculateDivergence(U1, mesh, U_wall);
+        
+        // 检查散度是否有效
+        if (DivU.getScalarVector().empty()) {
+            std::cerr << "错误：散度计算返回了空向量。" << std::endl;
+            break;
+        }
+
+        // 将散度值存储到向量中
+        scalarVector = DivU.getScalarVector();
+        Scalar sum = 0.0; // 初始化和为零
+
+        for (const auto& value : scalarVector) {
+            sum += value; // 累加每个元素 
+        }
+
+        // 打印和
+         std::cout << "scalarVector 的和: " << sum << std::endl;
+        std::vector<Scalar> b1 = (DivU * -1).getScalarVector();
+        
+        // 3. 组装 A1 和 b1（泊松方程，更新压力）
+        // 在更新 A1 之前将其重置为全零
+        std::fill(A1.begin(), A1.end(), std::vector<Scalar>(mesh.numberOfCells(), 0.0));
+        separateLaplaceP(mesh, 1, A1, b1, A0);  // 更新 A1, b1
+        
+        // 使用高斯赛德尔求解器解压力修正方程
+        GaussSeidel gs;
+        auto solution2 = gs.solve(A1, b1);  // 注意这里解的是 A1, b1
+        Field p_(solution2);
+        
+        // 4. 计算速度修正
+        Field divp_ = calculateGradient(p_, mesh, 0.0);
+        Field u_ = computeVelocityCorrection(divp_, A0, faceVol);
+        
+        // 5. 更新压力场和速度场
+        Field P1 = P0 + 0.3*p_;
+        Field U1_new = U1 + u_;
+        
+        // 计算新的速度场散度以判断是否收敛
+        Field divU1 = calculateDivergence(U1_new, mesh, U_wall);
+        
+        // 判断收敛条件：散度的最大值是否小于阈值
+        if (!scalarVector.empty()) {
+         
+
+            // 判断收敛条件
+            if (abs(sum) < 0.1 ) {
+                std::cout << "SIMPLE算法在第 " << iter + 1 << " 次迭代后收敛。" << std::endl;
+               
+                break;
+            }
+        } else {
+            std::cerr << "错误：新的速度场散度计算返回了空向量。" << std::endl;
+            break;
+        }
+
+        // 更新初始猜解以进行下一轮迭代
+        P0 = P1;
+        U0 = U1_new;
+  
+    
+    }
+
+    U0.print();
+    
+    return 0;
+}

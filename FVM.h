@@ -39,18 +39,20 @@ private:
     int maxIterations; // 最大迭代次数
 };
 
+
 class GaussSeidel3D {
 public:
-    GaussSeidel3D(double tolerance = 1e-10, int maxIterations = 1000, double relaxationFactor = 1.0);
+    // 构造函数
+    GaussSeidel3D(double tolerance=10e-8, int maxIterations =1000, double relaxationFactor = 1);
+
+    // 求解函数，A 是系数矩阵，b 是右边的向量矩阵，返回求解结果
     std::vector<std::vector<double>> solve(const std::vector<std::vector<double>>& A,
-                                            const std::vector<double>& b0X,
-                                            const std::vector<double>& b0Y,
-                                            const std::vector<double>& b0Z);
+                                           const std::vector<std::vector<double>>& b);
 
 private:
-    double tolerance; // 收敛容差
-    int maxIterations; // 最大迭代次数
-    double relaxationFactor; // 松弛因子
+    double tolerance;         // 容许误差
+    int maxIterations;        // 最大迭代次数
+    double relaxationFactor;  // 松弛因子
 };
 class Jacobi3D {
 public:
@@ -76,10 +78,15 @@ Field calculateGradient(Field& P, Mesh& mesh,Scalar P_farfield);
 Field calculateDivergence(Field& U, Mesh& mesh,Point U_wall);
 //离散拉普拉斯项
 void separateLaplace( Mesh& mesh, Scalar gramma,vector<vector<Scalar>>& A,vector<Scalar>& b);
-
+void separateLaplaceU(Mesh& mesh, Scalar gramma, vector<vector<Scalar>>& A, vector<vector<Scalar>>& b,Point U_WALL) ;
+  
 //离散对流项
-void separateConvective(Mesh& mesh, Scalar rho, vector<vector<Scalar>>& A, vector<Scalar>& b,Field Uf,Point Vw );
+void separateConvective(Mesh& mesh, Scalar rho, vector<vector<Scalar>>& A, vector<vector<Scalar>>& b,Field Uf,Point Vw );
 
 //离散压力泊松方程
 void separateLaplaceP( Mesh& mesh, Scalar gramma,vector<vector<Scalar>>& A,vector<Scalar>& b,vector<vector<Scalar>>& AP);
+
+// 声明计算速度修正的函数
+Field computeVelocityCorrection(const Field& p, const std::vector<std::vector<double>>& ap, const Field& vol);
+
 #endif // 
