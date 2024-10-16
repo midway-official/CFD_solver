@@ -330,6 +330,8 @@ Field calculateGradient(Field& P, Mesh& mesh,Scalar P_farfield) {
     Field facearea = mesh.calculateAllfaceAreas();
     Field facenorm = mesh.calculateAllfaceNormals();
     Field cellVol = mesh.calculateAllcellVolumes();
+    Field facecenter = mesh.calculateAllfaceCenters();
+    Field cellcenter = mesh.calculateAllcellCenters();
 
     for (size_t i = 0; i < mesh.numberOfFaces(); ++i) {
         int bctype = mesh.getFace(i)[1]; // 获取bctype
@@ -344,18 +346,26 @@ Field calculateGradient(Field& P, Mesh& mesh,Scalar P_farfield) {
                     cerr << "Error: Cell index out of range. c0: " << c0 << ", c1: " << c1 << ", P size: " << P.size() << endl;
                     throw out_of_range("Cell超出索引.");
                 }
+                Point P_f= facecenter.pointAt(i);
+                Point P_c0= cellcenter.pointAt(c0);
+                Point P_c1= cellcenter.pointAt(c1);
+                Scalar d_c0 = (P_f - P_c0).magnitude(); // 面中心到c0中心的距离
+                Scalar d_c1 = (P_f - P_c1).magnitude(); // 面中心到c1中心的距离
 
-                Scalar Pf = -(P.scalarAt(c0) + P.scalarAt(c1)) / 2.0; // 法向量指向c0，故加负号表示朝外
+                // 计算插值权重 alpha
+                Scalar alpha = d_c1 / (d_c0 + d_c1);
+
+                Scalar Pf = (1-alpha)*P.scalarAt(c0) + P.scalarAt(c1)*alpha ; // 法向量指向c0，故加负号表示朝外
                 double A = facearea.scalarAt(i); // 当前面面积
 
                 Point gradientPc0 = gradientP.pointAt(c0);
                 Point gradientPc1 = gradientP.pointAt(c1);
 
-                gradientP.setPoint(c0, gradientPc0 + facenorm.pointAt(i) * Pf * A);
-                gradientP.setPoint(c1, gradientPc1 + facenorm.pointAt(i) * Pf * A * (-1.0)); // c0 c1外向面法向量相反
+                gradientP.setPoint(c0, gradientPc0 - facenorm.pointAt(i) * Pf * A);
+                gradientP.setPoint(c1, gradientPc1 + facenorm.pointAt(i) * Pf * A ); // c0 c1外向面法向量相反
                 break;
             }
-            case 9: { // 压力远场或描述压强
+            /*case 9: { // 压力远场或描述压强
                 size_t c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
                //c1为0(zoneid, bctype, n0, n1, n2, n3, c0, c1)
 
@@ -365,37 +375,76 @@ Field calculateGradient(Field& P, Mesh& mesh,Scalar P_farfield) {
                     throw out_of_range("Cell超出索引.");
                 }
 
-                Scalar Pf = -(P.scalarAt(c0) + P_farfield) / 2.0; // 法向量指向c0，故加负号表示朝外
+                Scalar Pf =  P_farfield; // 法向量指向c0，故加负号表示朝外
                 double A = facearea.scalarAt(i); // 当前面面积
 
                 Point gradientPc0 = gradientP.pointAt(c0);
                 
 
-                gradientP.setPoint(c0, gradientPc0 + facenorm.pointAt(i) * Pf * A);
+                gradientP.setPoint(c0, gradientPc0 - facenorm.pointAt(i) * Pf * A);
                 
                 break;
             }
             case 36: { // 零压梯度 出流条件
                 size_t c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
-               //c1为0(zoneid, bctype, n0, n1, n2, n3, c0, c1)
-
-                // 确保 c0 和 c1 在有效范围内
-                if (c0 >= P.size() ) {
-                    cerr << "Error: Cell index out of range. c0: " << c0 << ", c1: " << "零压梯度" << ", P size: " << P.size() << endl;
-                    throw out_of_range("Cell超出索引.");
-                }
-
-                Scalar Pf = -P.scalarAt(c0); // 法向量指向c0，故加负号表示朝外
+                Scalar Pf =  P.scalarAt(c0); // 法向量指向c0，故加负号表示朝外
                 double A = facearea.scalarAt(i); // 当前面面积
 
                 Point gradientPc0 = gradientP.pointAt(c0);
                 
 
-                gradientP.setPoint(c0, gradientPc0 + facenorm.pointAt(i) * Pf * A);
+                gradientP.setPoint(c0, gradientPc0 - facenorm.pointAt(i) * Pf * A);
                 
                 break;
-            }
+            }*/
             // 其他面类型可以在此添加不同的处理逻辑
+            default:
+                // 对于其他类型的面，跳过
+                //wall不用处理
+                continue;
+        }
+    }
+
+
+    return gradientP / cellVol;
+}
+
+
+Field calculateGradientPc(Field& P, Mesh& mesh) {
+    Field gradientP(mesh.numberOfCells(), vector<double>{0, 0, 0});
+    Field facearea = mesh.calculateAllfaceAreas();
+    Field facenorm = mesh.calculateAllfaceNormals();
+    Field cellVol = mesh.calculateAllcellVolumes();
+    Field facecenter = mesh.calculateAllfaceCenters();
+    Field cellcenter = mesh.calculateAllcellCenters();
+
+    for (size_t i = 0; i < mesh.numberOfFaces(); ++i) {
+        int bctype = mesh.getFace(i)[1]; // 获取bctype
+
+        switch(bctype) {
+            case 2: { // 内部面
+                size_t c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
+                size_t c1 = mesh.getFace(i)[7] - 1;//(zoneid, bctype, n0, n1, n2, n3, c0, c1)
+
+                Point P_f= facecenter.pointAt(i);
+                Point P_c0= cellcenter.pointAt(c0);
+                Point P_c1= cellcenter.pointAt(c1);
+                Scalar d_c0 = (P_f - P_c0).magnitude(); // 面中心到c0中心的距离
+                Scalar d_c1 = (P_f - P_c1).magnitude(); // 面中心到c1中心的距离
+
+                // 计算插值权重 alpha
+                Scalar alpha = d_c1 / (d_c0 + d_c1);
+
+                Scalar Pf = (1-alpha)*P.scalarAt(c0) + P.scalarAt(c1)*alpha ; // 法向量指向c0，故加负号表示朝外
+                double A = facearea.scalarAt(i); // 当前面面积
+
+                Point gradientPc0 = gradientP.pointAt(c0);
+                Point gradientPc1 = gradientP.pointAt(c1);
+
+                gradientP.setPoint(c0, gradientPc0 - facenorm.pointAt(i) * Pf * A);
+                gradientP.setPoint(c1, gradientPc1 + facenorm.pointAt(i) * Pf * A ); // c0 c1外向面法向量相反
+                break;
+            }
             default:
                 // 对于其他类型的面，跳过
                 //wall不用处理
@@ -413,15 +462,25 @@ Field calculateDivergence(Field& U, Mesh& mesh, Point U_wall) {
     Field facearea = mesh.calculateAllfaceAreas();
     Field facenorm = mesh.calculateAllfaceNormals();
     Field cellVol = mesh.calculateAllcellVolumes();
-
+    Field facecenter = mesh.calculateAllfaceCenters();
+    Field cellcenter = mesh.calculateAllcellCenters();
     for (size_t i = 0; i < mesh.numberOfFaces(); ++i) {
         int bctype = mesh.getFace(i)[1]; // 获取bctype
         switch(bctype) {
             case 2:{ // 内部面
+                    // 计算面中心点到单元格中心的距离
+                
                 size_t c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
                 size_t c1 = mesh.getFace(i)[7] - 1;
+                Point P_f= facecenter.pointAt(i);
+                Point P_c0= cellcenter.pointAt(c0);
+                Point P_c1= cellcenter.pointAt(c1);
+                Scalar d_c0 = (P_f - P_c0).magnitude(); // 面中心到c0中心的距离
+                Scalar d_c1 = (P_f - P_c1).magnitude(); // 面中心到c1中心的距离
 
-                Point Uf = (U.pointAt(c0) + U.pointAt(c1)) * (-0.5); // 计算面上的速度，加面法向量指入c0负号
+                // 计算插值权重 alpha
+                Scalar alpha = d_c1 / (d_c0 + d_c1);
+                Point Uf = U.pointAt(c0)*(1-alpha) + U.pointAt(c1) * (alpha); // 计算面上的速度
 
                 Scalar A = facearea.scalarAt(i); // 当前面面积
 
@@ -429,48 +488,49 @@ Field calculateDivergence(Field& U, Mesh& mesh, Point U_wall) {
                 Scalar divergenceContributionC0 = A * (Uf.dot(facenorm.pointAt(i)));
                 Scalar divergenceContributionC1 = A * (Uf.dot(facenorm.pointAt(i)));
 
-                divergenceU.setScalar(c0, divergenceU.scalarAt(c0) + divergenceContributionC0);
-                divergenceU.setScalar(c1, divergenceU.scalarAt(c1) - divergenceContributionC1); // 法向量相反
+                divergenceU.setScalar(c0, divergenceU.scalarAt(c0) - divergenceContributionC0);
+                divergenceU.setScalar(c1, divergenceU.scalarAt(c1) + divergenceContributionC1); // 法向量相反
                 break;
             }
-            case 9:{ // 压力远场，描述压强
+            /*case 9:{ // 压力远场，描述压强
                 size_t c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
                 
                 Point p0(vector<Scalar>{0.0, 0.0, 0.0});
-                Point Uf = (U.pointAt(c0) + p0) * (-0.5); // 计算面上的速度，加面法向量指入c0负号
+
+                Point Uf =  p0; // 计算面上的速度，加面法向量指入c0负号
 
                 Scalar A = facearea.scalarAt(i); // 当前面面积
 
                 // 散度更新
                 Scalar divergenceContributionC0 = A * (Uf.dot(facenorm.pointAt(i)));
-                divergenceU.setScalar(c0, divergenceU.scalarAt(c0) + divergenceContributionC0);
+                divergenceU.setScalar(c0, divergenceU.scalarAt(c0) - divergenceContributionC0);
                 break;
             }
             case 36:{ // 零压梯度 出流条件
                 size_t c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
                 
                 Point p0(vector<Scalar>{0.0, 0.0, 0.0});
-                Point Uf = (U.pointAt(c0) + p0) * (-0.5); // 计算面上的速度，加面法向量指入c0负号
+                Point Uf = p0 ; // 计算面上的速度，加面法向量指入c0负号
 
                 Scalar A = facearea.scalarAt(i); // 当前面面积
 
                 // 散度更新
                 Scalar divergenceContributionC0 = A * (Uf.dot(facenorm.pointAt(i)));
-                divergenceU.setScalar(c0, divergenceU.scalarAt(c0) + divergenceContributionC0);
+                divergenceU.setScalar(c0, divergenceU.scalarAt(c0) - divergenceContributionC0);
                 break;
             }
             case 3:{ // wall壁面
                 size_t c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
                 
-                Point Uf = (U.pointAt(c0) + U_wall) * (-0.5); // 计算面上的速度，加面法向量指入c0负号
+                Point Uf = U_wall; // 计算面上的速度，加面法向量指入c0负号
 
                 Scalar A = facearea.scalarAt(i); // 当前面面积
 
                 // 散度更新
-                Scalar divergenceContributionC0 = A * (Uf.dot(facenorm.pointAt(i)));
-                divergenceU.setScalar(c0, divergenceU.scalarAt(c0) + divergenceContributionC0);
+                Scalar divergenceContributionC0 = 0;
+                divergenceU.setScalar(c0, divergenceU.scalarAt(c0) - divergenceContributionC0);
                 break;
-            }
+            }*/
             default:
                 // 对于其他类型的面，跳过
                 continue;
@@ -533,8 +593,8 @@ void separateLaplace(Mesh& mesh, Scalar gramma, vector<vector<Scalar>>& A, vecto
             case 36: // 零压梯度
                 c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
                
-                A[c0][c0] += 0 * dS; // 不影响
-                b[c0] += 0 * dS;
+                A[c0][c0] += 0 ; // 不影响
+                b[c0] += 0 ;
                 break;
 
             default:
@@ -596,7 +656,10 @@ void separateLaplaceU(Mesh& mesh, Scalar gramma, vector<vector<Scalar>>& A, vect
             case 3: // 壁面
             
                 c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
-               
+                distance = (cellCenter.pointAt(c0) - faceCenter.pointAt(i)).magnitude();
+                area = facearea.scalarAt(i);
+              
+                dS = -gramma * area / (distance );
                 A[c0][c0] += dS;
                 b[c0][0] += U_WALL.getCoordinate(0) * dS; // 边界上压强为0
                 b[c0][1] +=  U_WALL.getCoordinate(1) * dS;
@@ -626,21 +689,26 @@ void separateConvective(Mesh& mesh, Scalar rho, vector<vector<Scalar>>& A, vecto
         
         // 在 switch 语句外部声明变量
         size_t c0, c1; // 定义 c0 和 c1
-        Scalar distance, area, Vol, dS,mf;
-        Point u0,u1;
+        Scalar distance, area, Vol, dS,mf,d_c0,d_c1,alpha;
+        Point u0,u1,P_f,P_c0,P_c1,uf;
         switch (bctype) {
             case 2: // 内部面
                 c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
                 c1 = mesh.getFace(i)[7] - 1;
                 u0=  Uf.pointAt(c0);
                 u1=  Uf.pointAt(c1);
+                 P_f= faceCenter.pointAt(i);
+                 P_c0= cellCenter.pointAt(c0);
+                 P_c1= cellCenter.pointAt(c1);
+                 d_c0 = (P_f - P_c0).magnitude(); // 面中心到c0中心的距离
+                 d_c1 = (P_f - P_c1).magnitude(); // 面中心到c1中心的距离
+
+                // 计算插值权重 alpha
+                alpha = d_c1 / (d_c0 + d_c1);
                 area = facearea.scalarAt(i);
-                if ((facenorm.pointAt(i)).dot(u1) >= 0)//速度从c1流向c0
-                {
-                    mf=-u1.dot(facenorm.pointAt(i))*area*rho;//流入为负
-                    }else{
-                    mf=-u0.dot(facenorm.pointAt(i))*area*rho;//流出为正
-                }
+                uf=u0*(1-alpha) + u1 * (alpha);
+                mf= (uf.dot(facenorm.pointAt(i)))*area*rho*(-1);
+                
                 if (mf >=0)
                 {
                     A[c0][c0] +=mf;
@@ -655,59 +723,7 @@ void separateConvective(Mesh& mesh, Scalar rho, vector<vector<Scalar>>& A, vecto
                
                 
                 break;
-            case 36: //零压梯度
-            case 9: // 压力远场
-                c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
-                
-                u0=  Uf.pointAt(c0);
-                u1=  Point(vector<Scalar>(3,0));
-                area = facearea.scalarAt(i);
-                if ((facenorm.pointAt(i)).dot(u0) >= 0)//速度从c1流向c0
-                {
-                    mf=-u1.dot(facenorm.pointAt(i))*area*rho;//流入为负
-                    }else{
-                    mf=-u0.dot(facenorm.pointAt(i))*area*rho;//流出为正
-                }
-                if (mf >=0)
-                {
-                    A[c0][c0] +=mf;
-                    
-                }
-                else
-                {
-                    
-                    b[c0][0]-=mf*u1.getCoordinate(0);
-                    b[c0][1]-=mf*u1.getCoordinate(1);
-                    b[c0][2]-=mf*u1.getCoordinate(2);
-                }
-                
-
-            case 3: // 壁面
-           
-                 c0 = mesh.getFace(i)[6] - 1; // 编号减1转换为索引
-                
-                u0=  Uf.pointAt(c0);
-                u1=  Vw;
-                area = facearea.scalarAt(i);
-                if ((facenorm.pointAt(i)).dot(u0) >= 0)//速度从c1流向c0
-                {
-                    mf=-u1.dot(facenorm.pointAt(i))*area*rho;//流入为负
-                    }else{
-                    mf=-u0.dot(facenorm.pointAt(i))*area*rho;//流出为正
-                }
-                if (mf >=0)
-                {
-                    A[c0][c0] +=mf;
-                    
-                }
-                else
-                {
-                    
-                    b[c0][0]-=mf*u1.getCoordinate(0);
-                    b[c0][1]-=mf*u1.getCoordinate(1);
-                    b[c0][2]-=mf*u1.getCoordinate(2);
-                }
-                break;
+            
 
             default:
                 break;
@@ -745,7 +761,7 @@ void separateLaplaceP(Mesh& mesh, Scalar gramma, vector<vector<Scalar>>& A, vect
                 
                 dS = -gramma * area / (distance );
 
-                A[c0][c0] +=AP[c0][c0]*dS /cellVol.scalarAt(c0) ;
+                A[c0][c0] += AP[c0][c0]*dS /cellVol.scalarAt(c0) ;
                 A[c1][c0] -= AP[c1][c1]*dS /cellVol.scalarAt(c1);
                 A[c0][c1] -= AP[c0][c0]*dS /cellVol.scalarAt(c0);
                 A[c1][c1] += AP[c1][c1]*dS /cellVol.scalarAt(c1);
@@ -792,7 +808,7 @@ Field computeVelocityCorrection(const Field& p, const std::vector<std::vector<do
         double ap_ii = ap[i][i];  // 主对角元
 
         // 计算速度修正：(-vol_i / ap_ii) * p_i
-        double scale = -vol_i / ap_ii;
+        double scale = -0.001;
         Point velocityCorr_i = p_i * scale;
 
         // 更新 velocityCorr 场中的第 i 个点

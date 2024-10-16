@@ -74,6 +74,7 @@ std::vector<std::vector<Scalar>> combineVectors(const std::vector<double>& vec1,
 
 //梯度计算(zoneid, bctype, n0, n1, n2, n3, c0, c1)
 Field calculateGradient(Field& P, Mesh& mesh,Scalar P_farfield);
+Field calculateGradientPc(Field& P, Mesh& mesh);
 //散度计算
 Field calculateDivergence(Field& U, Mesh& mesh,Point U_wall);
 //离散拉普拉斯项
