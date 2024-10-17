@@ -3,7 +3,7 @@
 
 using namespace std;
 
-string filename = "small.msh"; // 输入文件名
+
 // 计算速度场残差和
 Scalar computeResidualSumU(const std::vector<std::vector<Scalar>>& u0, const std::vector<std::vector<Scalar>>& u1) {
     if (u0.size() != u1.size()) {
@@ -43,6 +43,9 @@ Scalar computeResidualSumP(const std::vector<Scalar>& p0, const std::vector<Scal
 
 
 int main() {
+    cout << "指定网格文件" << endl;
+    string filename ;// 输入文件名
+    cin >> filename ;
     cout << "开始读取网格" << endl;
     Mesh mesh(filename);
     cout << "完成网格读取, mesh对象创建" << endl;
@@ -52,17 +55,62 @@ int main() {
     Field facearea = mesh.calculateAllfaceAreas();
     Field facenorm = mesh.calculateAllfaceNormals();
     Field faceVol = mesh.calculateAllcellVolumes();
-    size_t n = mesh.numberOfCells();
+    //size_t n = mesh.numberOfCells();
     MeshAnalyzer analyzer;
 
     // 修改出流边界，零压梯度
     mesh.setBctypeForFace(11, 36);
     auto zoneInfo = analyzer.analyzeMesh(mesh);
     analyzer.printZoneInfo(zoneInfo);
-    
-    // 边界条件
-    Point U_wall(vector<Scalar>{-0.001, 0.0, 0.0});
-    
+     MeshAnalyzer analyzer0;
+
+    // 进行网格分析并打印初始网格信息
+    auto zoneInfo0 = analyzer0.analyzeMesh(mesh);
+    analyzer.printZoneInfo(zoneInfo0);
+
+    char modify;
+    do {
+        // 询问是否修改边界条件
+        std::cout << "是否需要修改边界条件? (y/n): ";
+        std::cin >> modify;
+
+        if (modify == 'y' || modify == 'Y') {
+            int zoneid;
+            int bctype;
+
+            // 询问要修改的zoneid和bctype
+            std::cout << "请输入要修改边界的zoneid: ";
+            std::cin >> zoneid;
+            std::cout << "请输入新的边界条件编号 (bctype): ";
+            std::cin >> bctype;
+
+            // 修改网格边界条件
+            mesh.setBctypeForFace(zoneid, bctype);
+
+            // 再次打印更新后的网格信息
+            zoneInfo = analyzer.analyzeMesh(mesh);
+            analyzer.printZoneInfo(zoneInfo);
+        }
+
+    } while (modify == 'y' || modify == 'Y');
+
+    std::cout << "边界条件完成修正." << std::endl;
+    // 滑移壁面速度
+    // 询问用户输入x, y, z分量
+    Scalar x, y, z;
+    cout << "输入滑移壁面速度x分量: ";
+    cin >> x;
+    cout << "输入滑移壁面速度y分量: ";
+    cin >> y;
+    cout << "输入滑移壁面速度z分量: ";
+    cin >> z;
+
+    Point U_wall(vector<Scalar>{x, y, z});
+    cout<< "完成滑移壁面速度设置"<<endl;
+    cout<< "请输入simple算法最大迭代次数"<<endl;
+    int sumiter;
+    cin>>sumiter;
+    cout<< "初始化。。。"<<endl;
     // 初始猜解初始化
     Field P0(mesh.numberOfCells(), 0.0);
     Field U0(mesh.numberOfCells(), std::vector<Scalar>{0.0, 0.0, 0.0});
@@ -73,7 +121,8 @@ int main() {
     std::vector<std::vector<Scalar>> b0(mesh.numberOfCells(), std::vector<Scalar>(3, 0.0));
     std::vector<Scalar> b1(mesh.numberOfCells(),  0.0);
     std::vector<Scalar> scalarVector; // 声明用于存储散度值的向量
-for (int iter = 0; iter < 1000; ++iter) {
+    cout<< "开始simple算法迭代"<<endl;
+for (int iter = 0; iter < sumiter; ++iter) {
         // 将 A0 和 A1 重置为全零
         // 重置 A0 和 A1
         for (auto& row : A0) {
@@ -129,7 +178,8 @@ for (int iter = 0; iter < 1000; ++iter) {
         Scalar resU=computeResidualSumU(U0.getPointVector(),U1.getPointVector());
         Scalar resP=computeResidualSumP(P0.getScalarVector(),(P0+0.01*pc).getScalarVector());
         // 5. 更新压力场和速度场
-        P0= P0+0.01*pc;
+        Scalar dt = 0.01;
+        P0= P0+dt*pc;
         U0= U1+uc;
         
         // 计算新的速度场散度以判断是否收敛
@@ -143,14 +193,14 @@ for (int iter = 0; iter < 1000; ++iter) {
         }
 
         // 打印和
-         std::cout << "速度散度场的和(DivU): " << sum <<" 速度场残差(RESU): "<<resU<<" 压力场残差(RESP): "<<resP<< std::endl;
+         std::cout << "连续性方程残差(DivU): " << sum <<" 速度场残差(RESU): "<<resU<<" 压力场残差(RESP): "<<resP<< std::endl;
         
         // 判断收敛条件：散度的最大值是否小于阈值
         if (!scalarVector.empty()) {
          
 
             // 判断收敛条件
-            if (abs(sum) < 0.0001 ) {
+            if (abs(resU) < 10e-6 || abs(sum) < 10e-6  ) {
                 std::cout << "SIMPLE算法在第 " << iter + 1 << " 次迭代后收敛。" << std::endl;
                
                 break;
@@ -165,7 +215,17 @@ for (int iter = 0; iter < 1000; ++iter) {
     
     }
 
-    U0.print();
+     // 询问用户是否打印速度场
+    std::string userInput;
+    std::cout << "是否希望打印速度场 (y/n): ";
+    std::cin >> userInput;
+
+    // 根据用户的输入决定是否打印速度场
+    if (userInput == "y" || userInput == "Y") {
+        U0.print();
+    } else {
+        std::cout << "速度场打印被跳过." << std::endl;
+    }
     
     return 0;
 }

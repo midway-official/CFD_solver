@@ -808,7 +808,7 @@ Field computeVelocityCorrection(const Field& p, const std::vector<std::vector<do
         double ap_ii = ap[i][i];  // 主对角元
 
         // 计算速度修正：(-vol_i / ap_ii) * p_i
-        double scale = -0.001;
+        double scale = -0.01;
         Point velocityCorr_i = p_i * scale;
 
         // 更新 velocityCorr 场中的第 i 个点
